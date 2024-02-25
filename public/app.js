@@ -1,6 +1,7 @@
 const socket = io("ws://localhost:3500");
 socket.emit("join", "roomName");
 socket.emit("id", "udin");
+
 function sendMessage(e) {
   e.preventDefault();
   const input = document.querySelector("input");

@@ -4,6 +4,7 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 import { MongoClient } from "mongodb";
+import { urlencoded } from "express";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -74,6 +75,72 @@ const io = new Server(httpServer, {
         : ["http://localhost:5500", "http://127.0.0.1:5500"],
   },
 });
+
+// Parse URL-encoded bodies (as sent by HTML forms)
+app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
+app.post("/joinRoom", async (req, res) => {
+  // Extract room, key, and user from request body
+  const { room, key, user } = req.body;
+  // Log the values to check if they are received correctly
+  console.log("Received data - user:", user, "room:", room, "key:", key);
+
+  try {
+    // Check if the user is in the whitelist for the specified room
+    const roomData = await haikus.findOne({ title: room });
+    if (roomData) {
+      if (
+        roomData.whitelist_participant &&
+        roomData.whitelist_participant.includes(user) &&
+        roomData.key === key
+      ) {
+        // User is in the participant whitelist and key matches
+        console.log(`${user} is in the participant whitelist for room ${room}`);
+        // Send a response back to the client with status 200
+        res.status(200).send({
+          message: `User ${user} joined room ${room} as an participant with key ${key}`,
+          status: 200,
+          type: "participant",
+        });
+      } else if (
+        roomData.whitelist_observer &&
+        roomData.whitelist_observer.includes(user) &&
+        roomData.key === key
+      ) {
+        // User is in the observer whitelist and key matches
+        console.log(`${user} is in the observer whitelist for room ${room}`);
+        // Send a response back to the client with status 200
+        res.status(200).send({
+          message: `User ${user} joined room ${room} as an observer with key ${key}`,
+          status: 200,
+          type: "observer",
+        });
+      } else {
+        // User is not in either whitelist or key does not match
+        console.log(
+          `${user} is not in the whitelist for room ${room} as participant or observer, or key is incorrect`
+        );
+        res.status(403).send({
+          message: `User ${user} is not authorized to join room ${room}`,
+          status: 403,
+          type: "",
+        });
+      }
+    } else {
+      // Room not found
+      console.log(`Room ${room} not found`);
+      res
+        .status(404)
+        .send({ message: `Room ${room} not found`, status: 404, type: "" });
+    }
+  } catch (error) {
+    // Handle errors
+    console.error("Error occurred while checking whitelist:", error);
+    res
+      .status(500)
+      .send({ message: "Internal server error", status: 500, type: "" });
+  }
+});
+
 var room = [];
 
 io.on("connection", async (socket) => {
@@ -96,7 +163,8 @@ io.on("connection", async (socket) => {
         // If participant/observer is already in the room but disconnected, mark as connected
         if (participant.status === "disconnected") {
           participant.status = "connected";
-          participant.onfocus = "didalam aplikasi"; // Set onFocus to 'didalam aplikasi'
+          participant.onfocus = "didalam aplikasi";
+          // Set onFocus to 'didalam aplikasi'
           emitRoom(roomName); // Emit the filtered room
           console.log(
             `${type} ${name} ${socket.id} reconnected to room: ${roomName}`
@@ -111,7 +179,8 @@ io.on("connection", async (socket) => {
         room[roomIndex][type].push({
           name: name,
           status: "connected",
-          onfocus: "didalam aplikasi", // Set onFocus to 'didalam aplikasi'
+          onfocus: "didalam aplikasi",
+          limit: 3, //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
         console.log(
@@ -128,7 +197,8 @@ io.on("connection", async (socket) => {
       room[room.length - 1][type].push({
         name: name,
         status: "connected",
-        onfocus: "didalam aplikasi", // Set onFocus to 'didalam aplikasi'
+        onfocus: "didalam aplikasi",
+        limit: 3, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
@@ -149,12 +219,33 @@ io.on("connection", async (socket) => {
         );
         if (participantIndex !== -1) {
           room[roomIndex].participant[participantIndex].onfocus = data;
+          emitUser(
+            roomName,
+            room[roomIndex].participant[participantIndex].name + "limit",
+            room[roomIndex].participant[participantIndex].limit
+          );
+          if (
+            room[roomIndex].participant[participantIndex].limit > 0 &&
+            data === "diluar aplikasi"
+          ) {
+            room[roomIndex].participant[participantIndex].limit =
+              room[roomIndex].participant[participantIndex].limit - 1;
+          }
+
           emitRoom(roomName); // Emit the filtered room
           console.log(`${name} ${socket.id} onFocus updated: ${data}`);
           console.log(JSON.stringify(room, null, 2));
         }
       }
     }
+  });
+
+  socket.on("kickUser", (user) => {
+    emitUser(roomName, user + "kick", "kicked");
+  });
+  socket.on("endRoom", () => {
+    io.to(roomName).emit("endRoom", "endRoom");
+    console.log("endRoom");
   });
 
   socket.on("disconnecting", () => {
@@ -172,6 +263,13 @@ io.on("connection", async (socket) => {
           (participant) => participant.name === name
         );
         if (disconnectingIndex !== -1) {
+          if (
+            room[roomIndex][disconnectingType][disconnectingIndex].limit > 0
+          ) {
+            room[roomIndex][disconnectingType][disconnectingIndex].limit =
+              room[roomIndex][disconnectingType][disconnectingIndex].limit - 1;
+          }
+
           room[roomIndex][disconnectingType][disconnectingIndex].status =
             "disconnected";
           room[roomIndex][disconnectingType][disconnectingIndex].onfocus =
@@ -186,6 +284,9 @@ io.on("connection", async (socket) => {
     console.log(JSON.stringify(room, null, 2));
   });
 
+  function emitUser(roomName, name, value) {
+    io.to(roomName).emit(name, value);
+  }
   // Function to emit only the filtered room
   function emitRoom(roomName) {
     let filteredRoom = room.filter((entry) => entry.room === roomName);
