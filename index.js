@@ -21,6 +21,7 @@ const uri =
 const client = new MongoClient(uri);
 const database = client.db("monitoring");
 const haikus = database.collection("room");
+const jawaban = database.collection("jawaban");
 const simulateAsyncPause = () =>
   new Promise((resolve) => {
     setTimeout(() => resolve(), 1000);
@@ -34,6 +35,12 @@ async function run() {
 
     // Open a Change Stream on the "haikus" collection
     changeStream = haikus.watch();
+    // Set up a change stream listener when change events are emitted
+    changeStream.on("change", (next) => {
+      // Print any change event
+      console.log("received a change to the collection: \t", next);
+    });
+    changeStream = jawaban.watch();
     // Set up a change stream listener when change events are emitted
     changeStream.on("change", (next) => {
       // Print any change event
@@ -78,49 +85,54 @@ const io = new Server(httpServer, {
 
 // Parse URL-encoded bodies (as sent by HTML forms)
 app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
+app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
 app.post("/joinRoom", async (req, res) => {
-  // Extract room, key, and user from request body
-  const { room, key, user } = req.body;
+  console.log('Join Room');
+  // Extract room, key, and user_id from request body
+  const { room, key, user_id } = req.body; // Changed from user to user_id
   // Log the values to check if they are received correctly
-  console.log("Received data - user:", user, "room:", room, "key:", key);
+  console.log("Received data - user_id:", user_id, "room:", room, "key:", key); // Updated from user to user_id
 
   try {
     // Check if the user is in the whitelist for the specified room
     const roomData = await haikus.findOne({ title: room });
     if (roomData) {
       if (
-        roomData.whitelist_participant &&
-        roomData.whitelist_participant.includes(user) &&
+        roomData.whitelist_partisipant &&
+        roomData.whitelist_partisipant.some(item => item.id == user_id) && // Changed from user to user_id
         roomData.key === key
       ) {
         // User is in the participant whitelist and key matches
-        console.log(`${user} is in the participant whitelist for room ${room}`);
+        console.log(`${user_id} is in the participant whitelist for room ${room}`); // Updated from user to user_id
         // Send a response back to the client with status 200
         res.status(200).send({
-          message: `User ${user} joined room ${room} as an participant with key ${key}`,
+          message: `User ${user_id} joined room ${room} as an participant with key ${key}`, // Updated from user to user_id
           status: 200,
           type: "participant",
+          list_soal: roomData.list_soal,
+          idsoal: roomData.idsoal,
+          idroom: roomData.roomid
         });
       } else if (
         roomData.whitelist_observer &&
-        roomData.whitelist_observer.includes(user) &&
+        roomData.whitelist_observer.some(item => item.id == user_id) && // Changed from user to user_id
         roomData.key === key
       ) {
         // User is in the observer whitelist and key matches
-        console.log(`${user} is in the observer whitelist for room ${room}`);
+        console.log(`${user_id} is in the observer whitelist for room ${room}`); // Updated from user to user_id
         // Send a response back to the client with status 200
         res.status(200).send({
-          message: `User ${user} joined room ${room} as an observer with key ${key}`,
+          message: `User ${user_id} joined room ${room} as an observer with key ${key}`, // Updated from user to user_id
           status: 200,
           type: "observer",
         });
       } else {
         // User is not in either whitelist or key does not match
         console.log(
-          `${user} is not in the whitelist for room ${room} as participant or observer, or key is incorrect`
+          `${user_id} is not in the whitelist for room ${room} as participant or observer, or key is incorrect`
         );
         res.status(403).send({
-          message: `User ${user} is not authorized to join room ${room}`,
+          message: `User ${user_id} is not authorized to join room ${room}`, // Updated from user to user_id
           status: 403,
           type: "",
         });
@@ -140,6 +152,29 @@ app.post("/joinRoom", async (req, res) => {
       .send({ message: "Internal server error", status: 500, type: "" });
   }
 });
+app.post("/answer", async (req, res) => {
+  console.log('Answer');
+  // Extract room, key, and user_id from request body
+  const { id_room, id_soal, question } = req.body; // Changed from user to user_id
+  // Log the values to check if they are received correctly
+  console.log("Received data - id_room:", id_room, "id_soal:", id_soal, "question:", question); // Updated from user to user_id
+
+  try {
+    // Check if the user is in the whitelist for the specified room
+    res.status(200).send({
+      message: `User ${user_id} joined room ${room} as an observer with key ${key}`, // Updated from user to user_id
+      status: 200,
+      type: "observer",
+    });
+  } catch (error) {
+    // Handle errors
+    console.error("Error occurred while checking whitelist:", error);
+    res
+      .status(500)
+      .send({ message: "Internal server error", status: 500, type: "" });
+  }
+});
+
 
 var room = [];
 
@@ -180,7 +215,7 @@ io.on("connection", async (socket) => {
           name: name,
           status: "connected",
           onfocus: "didalam aplikasi",
-          limit: 3, //// Set onFocus to 'didalam aplikasi'
+          limit: 100, //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
         console.log(
@@ -198,7 +233,7 @@ io.on("connection", async (socket) => {
         name: name,
         status: "connected",
         onfocus: "didalam aplikasi",
-        limit: 3, // Set onFocus to 'didalam aplikasi'
+        limit: 100, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
@@ -239,7 +274,27 @@ io.on("connection", async (socket) => {
       }
     }
   });
+  socket.on("answer", async (data) => {
+    console.log(data);
+    await jawaban.insertOne({
+      id_soal: data.idsoal,
+      id_room: data.idroom,
+      id_user: data.iduser,
+      questions: [{
+        question: data.question, type: 'type_1',
+        question_index: data.questionindex,
+        options: data.options,
+        answer_question: [{
+          title: data.answer,
+          value: data.answer,
+          answer_index: data.answerindex
+        }]
+      }
+      ],
+      // Corrected variable name
 
+    });
+  });
   socket.on("kickUser", (user) => {
     emitUser(roomName, user + "kick", "kicked");
   });
