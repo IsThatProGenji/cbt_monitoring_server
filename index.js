@@ -214,11 +214,12 @@ io.on("connection", async (socket) => {
   var roomName;
   var name;
   var type;
-
+  var nama;
   socket.on("join", (data) => {
     roomName = data["room"];
     name = data["name"];
     type = data["type"];
+    nama = data["nama"];
     socket.join(roomName); // Join the specific room
     // Check if the participant/observer is already in the room
     let roomIndex = room.findIndex((entry) => entry.room === roomName);
@@ -246,9 +247,11 @@ io.on("connection", async (socket) => {
         // Add participant/observer to the room
         room[roomIndex][type].push({
           name: name,
+          nama: nama,
           status: "connected",
           onfocus: "didalam aplikasi",
-          limit: 100, //// Set onFocus to 'didalam aplikasi'
+          limit: 3,
+          //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
         console.log(
@@ -264,9 +267,10 @@ io.on("connection", async (socket) => {
       });
       room[room.length - 1][type].push({
         name: name,
+        nama: nama,
         status: "connected",
         onfocus: "didalam aplikasi",
-        limit: 100, // Set onFocus to 'didalam aplikasi'
+        limit: 3, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
