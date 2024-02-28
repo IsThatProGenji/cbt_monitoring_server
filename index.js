@@ -87,7 +87,7 @@ const io = new Server(httpServer, {
 app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
 app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
 app.post("/joinRoom", async (req, res) => {
-  console.log('Join Room');
+  console.log("Join Room");
   // Extract room, key, and user_id from request body
   const { room, key, user_id } = req.body; // Changed from user to user_id
   // Log the values to check if they are received correctly
@@ -97,25 +97,80 @@ app.post("/joinRoom", async (req, res) => {
     // Check if the user is in the whitelist for the specified room
     const roomData = await haikus.findOne({ title: room });
     if (roomData) {
+      // Check if the room status is "publish"
+      if (roomData.status !== "publish") {
+        console.log(`Room ${room} is not published`);
+        return res.status(403).send({
+          message: `Room ${room} is not published. Users cannot join.`,
+          status: 403,
+          type: "",
+        });
+      }
+
       if (
         roomData.whitelist_partisipant &&
-        roomData.whitelist_partisipant.some(item => item.id == user_id) && // Changed from user to user_id
+        roomData.whitelist_partisipant.some((item) => item.id == user_id) && // Changed from user to user_id
         roomData.key === key
       ) {
         // User is in the participant whitelist and key matches
-        console.log(`${user_id} is in the participant whitelist for room ${room}`); // Updated from user to user_id
-        // Send a response back to the client with status 200
-        res.status(200).send({
-          message: `User ${user_id} joined room ${room} as an participant with key ${key}`, // Updated from user to user_id
-          status: 200,
-          type: "participant",
-          list_soal: roomData.list_soal,
-          idsoal: roomData.idsoal,
-          idroom: roomData.roomid
-        });
+        console.log(
+          `${user_id} is in the participant whitelist for room ${room}`
+        ); // Updated from user to user_id
+
+        // Fetch the response list jawaban if id_user, id_soal, and id_room are found
+        try {
+          const jawabanData = await jawaban.findOne(
+            {
+              id_soal: parseInt(roomData.idsoal),
+              id_room: parseInt(roomData.idroom),
+              id_user: parseInt(user_id),
+            },
+            {
+              _id: 0, // Exclude the _id field from the result
+              "questions.question_index": 1, // Include only the question_index field
+              "questions.answer_question.answer_index": 1, // Include only the answer_index field inside the answer_question array
+            }
+          );
+
+          if (jawabanData && jawabanData.questions.length > 0) {
+            const jawaban = jawabanData.questions.map((question) => ({
+              question_index: question.question_index,
+              answer_index: question.answer_question[0].answer_index, // Assuming there's only one answer per question
+            }));
+
+            console.log("Jawaban data found:", jawabanData);
+            // Send a response back to the client with status 200
+            res.status(200).send({
+              message: `User ${user_id} joined room ${room} as a participant with key ${key}`,
+              status: 200,
+              type: "participant",
+              idsoal: roomData.idsoal,
+              idroom: roomData.idroom,
+              jawaban: jawaban,
+              list_soal: roomData.list_soal,
+            });
+          } else {
+            console.log("No jawaban data found for the user");
+            // Send a response back to the client with status 200 but without jawaban data
+            res.status(200).send({
+              message: `User ${user_id} joined room ${room} as a participant with key ${key}`,
+              status: 200,
+              type: "participant",
+              idsoal: roomData.idsoal,
+              idroom: roomData.idroom,
+              jawaban: [],
+              list_soal: roomData.list_soal,
+            });
+          }
+        } catch (error) {
+          console.error("Error occurred while fetching jawaban data:", error);
+          res
+            .status(500)
+            .send({ message: "Internal server error", status: 500, type: "" });
+        }
       } else if (
         roomData.whitelist_observer &&
-        roomData.whitelist_observer.some(item => item.id == user_id) && // Changed from user to user_id
+        roomData.whitelist_observer.some((item) => item.id == user_id) && // Changed from user to user_id
         roomData.key === key
       ) {
         // User is in the observer whitelist and key matches
@@ -152,29 +207,6 @@ app.post("/joinRoom", async (req, res) => {
       .send({ message: "Internal server error", status: 500, type: "" });
   }
 });
-app.post("/answer", async (req, res) => {
-  console.log('Answer');
-  // Extract room, key, and user_id from request body
-  const { id_room, id_soal, question } = req.body; // Changed from user to user_id
-  // Log the values to check if they are received correctly
-  console.log("Received data - id_room:", id_room, "id_soal:", id_soal, "question:", question); // Updated from user to user_id
-
-  try {
-    // Check if the user is in the whitelist for the specified room
-    res.status(200).send({
-      message: `User ${user_id} joined room ${room} as an observer with key ${key}`, // Updated from user to user_id
-      status: 200,
-      type: "observer",
-    });
-  } catch (error) {
-    // Handle errors
-    console.error("Error occurred while checking whitelist:", error);
-    res
-      .status(500)
-      .send({ message: "Internal server error", status: 500, type: "" });
-  }
-});
-
 
 var room = [];
 
@@ -200,7 +232,8 @@ io.on("connection", async (socket) => {
           participant.status = "connected";
           participant.onfocus = "didalam aplikasi";
           // Set onFocus to 'didalam aplikasi'
-          emitRoom(roomName); // Emit the filtered room
+          emitRoom(roomName);
+          emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
           console.log(
             `${type} ${name} ${socket.id} reconnected to room: ${roomName}`
           );
@@ -276,28 +309,134 @@ io.on("connection", async (socket) => {
   });
   socket.on("answer", async (data) => {
     console.log(data);
-    await jawaban.insertOne({
+
+    const existingDocument = await jawaban.findOne({
       id_soal: data.idsoal,
       id_room: data.idroom,
       id_user: data.iduser,
-      questions: [{
-        question: data.question, type: 'type_1',
-        question_index: data.questionindex,
-        options: data.options,
-        answer_question: [{
-          title: data.answer,
-          value: data.answer,
-          answer_index: data.answerindex
-        }]
-      }
-      ],
-      // Corrected variable name
-
     });
+
+    if (existingDocument) {
+      // If the document already exists
+      const existingQuestion = existingDocument.questions.find(
+        (question) => question.question_index === data.questionindex
+      );
+
+      if (existingQuestion) {
+        // If the question index already exists, update the answer index
+        await jawaban.updateOne(
+          {
+            id_soal: data.idsoal,
+            id_room: data.idroom,
+            id_user: data.iduser,
+            "questions.question_index": data.questionindex,
+          },
+          {
+            $set: {
+              "questions.$.answer_question": [
+                {
+                  title: data.answer["title"],
+                  value: data.answer["value"],
+                  answer_index: data.answerindex,
+                },
+              ],
+            },
+          }
+        );
+      } else {
+        // If the question index doesn't exist, add a new question
+        await jawaban.updateOne(
+          {
+            id_soal: data.idsoal,
+            id_room: data.idroom,
+            id_user: data.iduser,
+          },
+          {
+            $push: {
+              questions: {
+                question: data.question,
+                type: "type_1",
+                question_index: data.questionindex,
+                options: data.option,
+                answer_question: [
+                  {
+                    title: data.answer["title"],
+                    value: data.answer["value"],
+                    answer_index: data.answerindex,
+                  },
+                ],
+              },
+            },
+          }
+        );
+      }
+    } else {
+      // If the document doesn't exist, insert a new one
+      await jawaban.insertOne({
+        id_soal: data.idsoal,
+        id_room: data.idroom,
+        id_user: data.iduser,
+        questions: [
+          {
+            question: data.question,
+            type: "type_1",
+            question_index: data.questionindex,
+            options: data.option,
+            answer_question: [
+              {
+                title: data.answer["title"],
+                value: data.answer["value"],
+                answer_index: data.answerindex,
+              },
+            ],
+          },
+        ],
+      });
+    }
   });
+
   socket.on("kickUser", (user) => {
     emitUser(roomName, user + "kick", "kicked");
   });
+  socket.on("resetUser", (userName) => {
+    if (roomName && userName) {
+      let roomIndex = room.findIndex((entry) => entry.room === roomName);
+      if (roomIndex !== -1) {
+        // Search for the user in the participant array
+        let participantIndex = room[roomIndex].participant.findIndex(
+          (participant) => participant.name === userName
+        );
+        if (participantIndex !== -1) {
+          // Reset the participant's limit to 3
+          room[roomIndex].participant[participantIndex].limit = 3;
+
+          console.log(`Reset ${userName}'s limit to 3`);
+          emitRoom(roomName); // Emit the filtered room
+          return; // Exit the function after resetting the limit
+        }
+
+        // Search for the user in the observer array
+        let observerIndex = room[roomIndex].observer.findIndex(
+          (observer) => observer.name === userName
+        );
+        if (observerIndex !== -1) {
+          // Reset the observer's limit to 3
+          room[roomIndex].observer[observerIndex].limit = 3;
+
+          console.log(`Reset ${userName}'s limit to 3`);
+          emitRoom(roomName); // Emit the filtered room
+          return; // Exit the function after resetting the limit
+        }
+
+        console.log(`User ${userName} not found in room ${roomName}`);
+      } else {
+        console.log(`Room ${roomName} not found`);
+      }
+    } else {
+      console.log(`Invalid room or user name provided`);
+    }
+  });
+
   socket.on("endRoom", () => {
     io.to(roomName).emit("endRoom", "endRoom");
     console.log("endRoom");
