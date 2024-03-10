@@ -472,7 +472,7 @@ io.on("connection", async (socket) => {
       }
     }
   });
-  socket.on("disconnecting", () => {
+  socket.on("disconnect", () => {
     // Update participant/observer's status to "disconnected" when they disconnect
     if (roomName && name) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
