@@ -311,32 +311,7 @@ io.on("connection", async (socket) => {
       }
     }
   });
-  socket.on("reconnect", (data) => {
-    if (roomName && name) {
-      let roomIndex = room.findIndex((entry) => entry.room === roomName);
-      if (roomIndex !== -1) {
-        let participantIndex = room[roomIndex].participant.findIndex(
-          (participant) => participant.name === name
-        );
-        emitUser(
-          roomName,
-          room[roomIndex].participant[participantIndex].name + "limit",
-          room[roomIndex].participant[participantIndex].limit
-        );
-        if (participantIndex !== -1) {
-          const maxLimit = 3;
-          if (room[roomIndex].participant[participantIndex].limit < maxLimit) {
-            room[roomIndex].participant[participantIndex].limit =
-              room[roomIndex].participant[participantIndex].limit + 1;
-          }
 
-          emitRoom(roomName); // Emit the filtered room
-          console.log(`${name} ${socket.id} limit updated:`);
-          console.log(JSON.stringify(room, null, 2));
-        }
-      }
-    }
-  });
   socket.on("answer", async (data) => {
     console.log(data);
 
@@ -471,7 +446,32 @@ io.on("connection", async (socket) => {
     io.to(roomName).emit("endRoom", "endRoom");
     console.log("endRoom");
   });
+  socket.on("recon", (data) => {
+    if (roomName && name) {
+      let roomIndex = room.findIndex((entry) => entry.room === roomName);
+      if (roomIndex !== -1) {
+        let participantIndex = room[roomIndex].participant.findIndex(
+          (participant) => participant.name === name
+        );
 
+        if (participantIndex !== -1) {
+          const maxLimit = 3;
+          if (room[roomIndex].participant[participantIndex].limit < maxLimit) {
+            room[roomIndex].participant[participantIndex].limit =
+              room[roomIndex].participant[participantIndex].limit + 1;
+          }
+          emitUser(
+            roomName,
+            room[roomIndex].participant[participantIndex].name + "limit",
+            room[roomIndex].participant[participantIndex].limit
+          );
+          emitRoom(roomName); // Emit the filtered room
+          console.log(`${name} ${socket.id} limit updated:`);
+          console.log(JSON.stringify(room, null, 2));
+        }
+      }
+    }
+  });
   socket.on("disconnecting", () => {
     // Update participant/observer's status to "disconnected" when they disconnect
     if (roomName && name) {
