@@ -291,11 +291,7 @@ io.on("connection", async (socket) => {
         );
         if (participantIndex !== -1) {
           room[roomIndex].participant[participantIndex].onfocus = data;
-          emitUser(
-            roomName,
-            room[roomIndex].participant[participantIndex].name + "limit",
-            room[roomIndex].participant[participantIndex].limit
-          );
+
           if (
             room[roomIndex].participant[participantIndex].limit > 0 &&
             data === "diluar aplikasi"
@@ -303,9 +299,37 @@ io.on("connection", async (socket) => {
             room[roomIndex].participant[participantIndex].limit =
               room[roomIndex].participant[participantIndex].limit - 1;
           }
-
+          emitUser(
+            roomName,
+            room[roomIndex].participant[participantIndex].name + "limit",
+            room[roomIndex].participant[participantIndex].limit
+          );
           emitRoom(roomName); // Emit the filtered room
           console.log(`${name} ${socket.id} onFocus updated: ${data}`);
+          console.log(JSON.stringify(room, null, 2));
+        }
+      }
+    }
+  });
+  socket.on("reconnect", (data) => {
+    if (roomName && name) {
+      let roomIndex = room.findIndex((entry) => entry.room === roomName);
+      if (roomIndex !== -1) {
+        let participantIndex = room[roomIndex].participant.findIndex(
+          (participant) => participant.name === name
+        );
+        if (participantIndex !== -1) {
+          const maxLimit = 3;
+          if (room[roomIndex].participant[participantIndex].limit < maxLimit) {
+            room[roomIndex].participant[participantIndex].limit++;
+          }
+          emitUser(
+            roomName,
+            room[roomIndex].participant[participantIndex].name + "limit",
+            room[roomIndex].participant[participantIndex].limit
+          );
+          emitRoom(roomName); // Emit the filtered room
+          console.log(`${name} ${socket.id} limit updated:`);
           console.log(JSON.stringify(room, null, 2));
         }
       }
