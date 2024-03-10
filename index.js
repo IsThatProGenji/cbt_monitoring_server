@@ -291,17 +291,18 @@ io.on("connection", async (socket) => {
         );
         if (participantIndex !== -1) {
           room[roomIndex].participant[participantIndex].onfocus = data;
-          emitUser(
-            roomName,
-            room[roomIndex].participant[participantIndex].name + "limit",
-            room[roomIndex].participant[participantIndex].limit
-          );
+
           if (
             room[roomIndex].participant[participantIndex].limit > 0 &&
             data === "diluar aplikasi"
           ) {
             room[roomIndex].participant[participantIndex].limit =
               room[roomIndex].participant[participantIndex].limit - 1;
+            emitUser(
+              roomName,
+              room[roomIndex].participant[participantIndex].name + "limit",
+              room[roomIndex].participant[participantIndex].limit
+            );
           }
 
           emitRoom(roomName); // Emit the filtered room
@@ -472,7 +473,8 @@ io.on("connection", async (socket) => {
       }
     }
   });
-  socket.on("disconnecting", () => {
+
+  socket.on("disconnect", () => {
     // Update participant/observer's status to "disconnected" when they disconnect
     if (roomName && name) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
@@ -501,11 +503,10 @@ io.on("connection", async (socket) => {
         }
       }
     }
-
-    socket.leave(roomName);
-    emitRoom(roomName); // Emit the filtered room
     console.log(`${name} ${socket.id} disconnected from ${roomName}`);
     console.log(JSON.stringify(room, null, 2));
+
+    emitRoom(roomName); // Emit the filtered room
   });
 
   function emitUser(roomName, name, value) {
