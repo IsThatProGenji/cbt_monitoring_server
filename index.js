@@ -98,21 +98,43 @@ app.post("/joinRoom", async (req, res) => {
     const roomData = await haikus.findOne({ title: room });
     if (roomData) {
       // Check if the room status is "publish"
-      if (roomData.status !== "publish") {
-        console.log(`Room ${room} is not published`);
-        return res.status(403).send({
-          message: `Room ${room} is not published. Users cannot join.`,
-          status: 403,
-          type: "",
-        });
+      // if (roomData.status !== "publish") {
+      //   console.log(`Room ${room} is not published`);
+      //   return res.status(403).send({
+      //     message: `Room ${room} is not published. Users cannot join.`,
+      //     status: 403,
+      //     type: "",
+      //   });
+      // }
+      let countdown = {};
+      if (roomData.status === "live") {
+        // Calculate the end time based on the start date and duration
+        const endTime = new Date(
+          roomData.startAt.getTime() +
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
+        );
+        // Calculate the remaining time in milliseconds
+        const durationMs = endTime.getTime() - new Date().getTime();
+        // Convert milliseconds to hours, minutes, and seconds
+        countdown.hours = Math.floor(durationMs / (1000 * 60 * 60));
+        countdown.minutes = Math.floor(
+          (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+        );
+        countdown.seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
       }
 
       if (
+        (countdown.hours > 0 ||
+          countdown.minutes > 0 ||
+          countdown.seconds > 0) &&
         roomData.whitelist_partisipant &&
         roomData.whitelist_partisipant.some((item) => item.id == user_id) && // Changed from user to user_id
-        roomData.key === key
+        roomData.key === key &&
+        roomData.status === "live"
       ) {
-        // User is in the participant whitelist and key matches
+        // User is in the participant whitelist, key matches, and countdown is greater than 0
         console.log(
           `${user_id} is in the participant whitelist for room ${room}`
         ); // Updated from user to user_id
@@ -148,6 +170,7 @@ app.post("/joinRoom", async (req, res) => {
               idroom: roomData.idroom,
               jawaban: jawaban,
               list_soal: roomData.list_soal,
+              countdown: countdown,
             });
           } else {
             console.log("No jawaban data found for the user");
@@ -160,6 +183,7 @@ app.post("/joinRoom", async (req, res) => {
               idroom: roomData.idroom,
               jawaban: [],
               list_soal: roomData.list_soal,
+              countdown: countdown,
             });
           }
         } catch (error) {
@@ -180,6 +204,7 @@ app.post("/joinRoom", async (req, res) => {
           message: `User ${user_id} joined room ${room} as an observer with key ${key}`, // Updated from user to user_id
           status: 200,
           type: "observer",
+          countdown: countdown ?? {},
         });
       } else {
         // User is not in either whitelist or key does not match
@@ -215,7 +240,7 @@ io.on("connection", async (socket) => {
   var name;
   var type;
   var nama;
-  socket.on("join", (data) => {
+  socket.on("join", async (data) => {
     roomName = data["room"];
     name = data["name"];
     type = data["type"];
@@ -250,7 +275,7 @@ io.on("connection", async (socket) => {
           nama: nama,
           status: "connected",
           onfocus: "didalam aplikasi",
-          limit: 3,
+          limit: 100,
           //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
@@ -270,7 +295,7 @@ io.on("connection", async (socket) => {
         nama: nama,
         status: "connected",
         onfocus: "didalam aplikasi",
-        limit: 3, // Set onFocus to 'didalam aplikasi'
+        limit: 100, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
@@ -298,13 +323,12 @@ io.on("connection", async (socket) => {
           ) {
             room[roomIndex].participant[participantIndex].limit =
               room[roomIndex].participant[participantIndex].limit - 1;
-            emitUser(
-              roomName,
-              room[roomIndex].participant[participantIndex].name + "limit",
-              room[roomIndex].participant[participantIndex].limit
-            );
           }
-
+          emitUser(
+            roomName,
+            room[roomIndex].participant[participantIndex].name + "limit",
+            room[roomIndex].participant[participantIndex].limit
+          );
           emitRoom(roomName); // Emit the filtered room
           console.log(`${name} ${socket.id} onFocus updated: ${data}`);
           console.log(JSON.stringify(room, null, 2));
@@ -443,10 +467,120 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("endRoom", () => {
-    io.to(roomName).emit("endRoom", "endRoom");
+  socket.on("endRoom", async () => {
+    try {
+      // Check the current status of the room
+      const roomData = await haikus.findOne({ title: roomName });
+
+      if (roomData) {
+        // If the room is currently published, change its status to "live"
+        if (roomData.status === "live") {
+          // Get today's date
+          const today = new Date();
+          // Update the room status to "live" and set the start date to today's date
+          await haikus.updateOne(
+            { title: roomName },
+            {
+              $set: {
+                status: "finish",
+                finishedAt: today,
+              },
+            }
+          );
+          // Calculate the end time based on the start date and duratio
+          io.to(roomName).emit("endRoom", "endRoom");
+          // Emit the countdown
+          io.to(roomName).emit("countdown", {
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+          });
+          console.log("Room finished and status updated to finish.");
+        }
+      } else {
+        console.log("Room not found.");
+      }
+    } catch (error) {
+      console.error("Error starting room:", error);
+    }
     console.log("endRoom");
   });
+  socket.on("startRoom", async () => {
+    try {
+      // Check the current status of the room
+      const roomData = await haikus.findOne({ title: roomName });
+
+      if (roomData) {
+        // If the room is currently published, change its status to "live"
+        if (roomData.status === "publish") {
+          // Get today's date
+          const today = new Date();
+          // Update the room status to "live" and set the start date to today's date
+          await haikus.updateOne(
+            { title: roomName },
+            {
+              $set: {
+                status: "live",
+                startAt: today,
+              },
+            }
+          );
+          // Calculate the end time based on the start date and duration
+          const endTime = new Date(
+            today.getTime() +
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
+          );
+          // Calculate the remaining time in milliseconds
+          const durationMs = endTime.getTime() - today.getTime();
+          // Convert milliseconds to hours, minutes, and seconds
+          const hours = Math.floor(durationMs / (1000 * 60 * 60));
+          const minutes = Math.floor(
+            (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+          );
+          const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+
+          // Emit the countdown
+          io.to(roomName).emit("countdown", {
+            hours: hours,
+            minutes: minutes,
+            seconds: seconds,
+          });
+          console.log("Room started and status updated to live.");
+        } else if (roomData.status === "live") {
+          // Calculate the end time based on the start date and duration
+          const endTime = new Date(
+            roomData.startAt.getTime() +
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
+          );
+          // Calculate the remaining time in milliseconds
+          const durationMs = endTime.getTime() - new Date().getTime();
+          // Convert milliseconds to hours, minutes, and seconds
+          const hours = Math.floor(durationMs / (1000 * 60 * 60));
+          const minutes = Math.floor(
+            (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+          );
+          const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+
+          // Emit the countdown
+          io.to(roomName).emit("countdown", {
+            hours: hours,
+            minutes: minutes,
+            seconds: seconds,
+          });
+          console.log("Room is already live.");
+        }
+      } else {
+        console.log("Room not found.");
+      }
+    } catch (error) {
+      console.error("Error starting room:", error);
+    }
+  });
+
   socket.on("recon", (data) => {
     if (roomName && name) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
@@ -489,12 +623,12 @@ io.on("connection", async (socket) => {
           (participant) => participant.name === name
         );
         if (disconnectingIndex !== -1) {
-          if (
-            room[roomIndex][disconnectingType][disconnectingIndex].limit > 0
-          ) {
-            room[roomIndex][disconnectingType][disconnectingIndex].limit =
-              room[roomIndex][disconnectingType][disconnectingIndex].limit - 1;
-          }
+          // if (
+          //   room[roomIndex][disconnectingType][disconnectingIndex].limit > 0
+          // ) {
+          //   room[roomIndex][disconnectingType][disconnectingIndex].limit =
+          //     room[roomIndex][disconnectingType][disconnectingIndex].limit - 1;
+          // }
 
           room[roomIndex][disconnectingType][disconnectingIndex].status =
             "disconnected";
