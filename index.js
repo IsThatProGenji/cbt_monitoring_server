@@ -581,30 +581,57 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("recon", (data) => {
-    if (roomName && name) {
-      let roomIndex = room.findIndex((entry) => entry.room === roomName);
-      if (roomIndex !== -1) {
-        let participantIndex = room[roomIndex].participant.findIndex(
-          (participant) => participant.name === name
-        );
+  socket.on("checkStatus", async () => {
+    try {
+      // Check the current status of the room
+      const roomData = await haikus.findOne({ title: roomName });
 
-        if (participantIndex !== -1) {
-          const maxLimit = 3;
-          if (room[roomIndex].participant[participantIndex].limit < maxLimit) {
-            room[roomIndex].participant[participantIndex].limit =
-              room[roomIndex].participant[participantIndex].limit + 1;
-          }
-          emitUser(
-            roomName,
-            room[roomIndex].participant[participantIndex].name + "limit",
-            room[roomIndex].participant[participantIndex].limit
+      if (roomData) {
+        // If the room is currently published, change its status to "live"
+        if (roomData.status === "live") {
+          // Get today's date
+          const today = new Date();
+
+          // Calculate the end time based on the start date and duration
+          const endTime = new Date(
+            roomData.startAt.getTime() +
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
-          emitRoom(roomName); // Emit the filtered room
-          console.log(`${name} ${socket.id} limit updated:`);
-          console.log(JSON.stringify(room, null, 2));
+          // Calculate the remaining time in milliseconds
+          const durationMs = endTime.getTime() - today.getTime();
+          // Convert milliseconds to hours, minutes, and seconds
+          const hours = Math.floor(durationMs / (1000 * 60 * 60));
+          const minutes = Math.floor(
+            (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+          );
+          const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+
+          // Emit the countdown
+          io.to(roomName).emit("countdown", {
+            hours: hours,
+            minutes: minutes,
+            seconds: seconds,
+          });
+        } else if (roomData.status === "finish") {
+          // Calculate the end time based on the start date and duration
+          // Emit the countdown
+          io.to(roomName).emit("countdown", {
+            hours: 0,
+            minutes: 0,
+            seconds: 0,
+          });
         }
+      } else {
+        io.to(roomName).emit("countdown", {
+          hours: 0,
+          minutes: 0,
+          seconds: 0,
+        });
       }
+    } catch (error) {
+      console.error("Error starting room:", error);
     }
   });
 
