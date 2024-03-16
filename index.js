@@ -157,7 +157,9 @@ app.post("/joinRoom", async (req, res) => {
           if (jawabanData && jawabanData.questions.length > 0) {
             const jawaban = jawabanData.questions.map((question) => ({
               question_index: question.question_index,
-              answer_index: question.answer_question[0].answer_index, // Assuming there's only one answer per question
+              answer_index: question.answer_question[0].answer_index,
+              answer_title: question.answer_question[0].title,
+              // Assuming there's only one answer per question
             }));
 
             console.log("Jawaban data found:", jawabanData);
