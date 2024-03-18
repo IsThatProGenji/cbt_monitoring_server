@@ -111,9 +111,9 @@ app.post("/joinRoom", async (req, res) => {
         // Calculate the end time based on the start date and duration
         const endTime = new Date(
           roomData.startAt.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+          roomData.duration.hours * 3600000 +
+          roomData.duration.minutes * 60000 +
+          roomData.duration.seconds * 1000
         );
         // Calculate the remaining time in milliseconds
         const durationMs = endTime.getTime() - new Date().getTime();
@@ -530,9 +530,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             today.getTime() +
-              roomData.duration.hours * 3600000 +
-              roomData.duration.minutes * 60000 +
-              roomData.duration.seconds * 1000
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - today.getTime();
@@ -554,9 +554,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             roomData.startAt.getTime() +
-              roomData.duration.hours * 3600000 +
-              roomData.duration.minutes * 60000 +
-              roomData.duration.seconds * 1000
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - new Date().getTime();
@@ -597,9 +597,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             roomData.startAt.getTime() +
-              roomData.duration.hours * 3600000 +
-              roomData.duration.minutes * 60000 +
-              roomData.duration.seconds * 1000
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - today.getTime();
@@ -637,7 +637,7 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on("disconnecting", () => {
     // Update participant/observer's status to "disconnected" when they disconnect
     if (roomName && name) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
