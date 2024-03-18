@@ -222,9 +222,11 @@ app.post("/joinRoom", async (req, res) => {
     } else {
       // Room not found
       console.log(`Room ${room} not found`);
-      res
-        .status(404)
-        .send({ message: `Room ${room} not found`, status: 404, type: "" });
+      res.status(404).send({
+        message: `Room ${room} Tidak Ditemukan`,
+        status: 404,
+        type: "",
+      });
     }
   } catch (error) {
     // Handle errors
@@ -247,6 +249,7 @@ io.on("connection", async (socket) => {
     name = data["name"];
     type = data["type"];
     nama = data["nama"];
+
     socket.join(roomName); // Join the specific room
     // Check if the participant/observer is already in the room
     let roomIndex = room.findIndex((entry) => entry.room === roomName);
@@ -277,7 +280,7 @@ io.on("connection", async (socket) => {
           nama: nama,
           status: "connected",
           onfocus: "didalam aplikasi",
-          limit: 3,
+          limit: 100,
           //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
@@ -297,15 +300,15 @@ io.on("connection", async (socket) => {
         nama: nama,
         status: "connected",
         onfocus: "didalam aplikasi",
-        limit: 3, // Set onFocus to 'didalam aplikasi'
+        limit: 100, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
         `${type} ${name} ${socket.id} connected to new room: ${roomName}`
       );
     }
-
-    // console.log(JSON.stringify(room, null, 2));
+    emitRoom(roomName);
+    console.log(JSON.stringify(room, null, 2));
   });
 
   socket.on("onfocus", (data) => {
@@ -425,6 +428,64 @@ io.on("connection", async (socket) => {
         ],
       });
     }
+    // socket.join(data.room); // Join the specific room
+    // Check if the participant/observer is already in the room
+    let roomIndex = room.findIndex((entry) => entry.room === data.room);
+    if (roomIndex !== -1) {
+      let participant = room[roomIndex][type].find(
+        (participant) => participant.name === data.name
+      );
+      if (participant) {
+        // If participant/observer is already in the room but disconnected, mark as connected
+        if (participant.status === "disconnected") {
+          participant.status = "connected";
+          participant.onfocus = "didalam aplikasi";
+          // Set onFocus to 'didalam aplikasi'
+          emitRoom(data.room);
+          emitUser(data.room, participant.name + "limit", participant.limit); // Emit the filtered room
+          console.log(
+            `${type} ${data.name} ${socket.id} reconnected to room: ${data.room}`
+          );
+        } else {
+          console.log(
+            `${type} ${data.name} ${socket.id} is already in room: ${data.room}`
+          );
+        }
+      } else {
+        // Add participant/observer to the room
+        room[roomIndex][type].push({
+          name: data.name,
+          nama: data.nama,
+          status: "connected",
+          onfocus: "didalam aplikasi",
+          limit: 100,
+          //// Set onFocus to 'didalam aplikasi'
+        });
+        emitRoom(data.room); // Emit the filtered room
+        console.log(
+          `${type} ${data.name} ${socket.id} connected to room: ${data.room}`
+        );
+      }
+    } else {
+      // Add new room and participant/observer
+      room.push({
+        room: data.room,
+        observer: [],
+        participant: [],
+      });
+      room[room.length - 1][type].push({
+        name: data.name,
+        nama: data.nama,
+        status: "connected",
+        onfocus: "didalam aplikasi",
+        limit: 100, // Set onFocus to 'didalam aplikasi'
+      });
+      emitRoom(data.room); // Emit the filtered room
+      console.log(
+        `${type} ${name} ${socket.id} connected to new room: ${data.room}`
+      );
+    }
+    emitRoom(data.room);
   });
 
   socket.on("kickUser", (user) => {
@@ -507,6 +568,7 @@ io.on("connection", async (socket) => {
     }
     console.log("endRoom");
   });
+
   socket.on("startRoom", async () => {
     try {
       // Check the current status of the room
