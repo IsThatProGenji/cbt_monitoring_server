@@ -17,7 +17,7 @@ const httpServer = createServer(app); // Changed instantiation
 app.use(express.static(path.join(__dirname, "public")));
 
 const uri =
-  "mongodb://root:password@103.85.58.94:27017/?directConnection=true&appName=mongosh+2.1.3&authSource=admin&replicaSet=rs0";
+  "mongodb://root:password@157.15.164.54:27017/?directConnection=true&appName=mongosh+2.1.3&authSource=admin&replicaSet=rs0";
 const client = new MongoClient(uri);
 const database = client.db("monitoring");
 const haikus = database.collection("room");
