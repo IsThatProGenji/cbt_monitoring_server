@@ -17,7 +17,7 @@ const httpServer = createServer(app); // Changed instantiation
 app.use(express.static(path.join(__dirname, "public")));
 
 const uri =
-  "mongodb://root:password@157.15.164.54:27017/?directConnection=true&appName=mongosh+2.1.3&authSource=admin&replicaSet=rs0";
+  "mongodb://root:password@103.85.58.94:27017/?directConnection=true&appName=mongosh+2.1.3&authSource=admin&replicaSet=rs0";
 const client = new MongoClient(uri);
 const database = client.db("monitoring");
 const haikus = database.collection("room");
@@ -111,9 +111,9 @@ app.post("/joinRoom", async (req, res) => {
         // Calculate the end time based on the start date and duration
         const endTime = new Date(
           roomData.startAt.getTime() +
-          roomData.duration.hours * 3600000 +
-          roomData.duration.minutes * 60000 +
-          roomData.duration.seconds * 1000
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
         );
         // Calculate the remaining time in milliseconds
         const durationMs = endTime.getTime() - new Date().getTime();
@@ -222,9 +222,11 @@ app.post("/joinRoom", async (req, res) => {
     } else {
       // Room not found
       console.log(`Room ${room} not found`);
-      res
-        .status(404)
-        .send({ message: `Room ${room} not found`, status: 404, type: "" });
+      res.status(404).send({
+        message: `Room ${room} Tidak Ditemukan`,
+        status: 404,
+        type: "",
+      });
     }
   } catch (error) {
     // Handle errors
@@ -247,6 +249,7 @@ io.on("connection", async (socket) => {
     name = data["name"];
     type = data["type"];
     nama = data["nama"];
+
     socket.join(roomName); // Join the specific room
     // Check if the participant/observer is already in the room
     let roomIndex = room.findIndex((entry) => entry.room === roomName);
@@ -277,7 +280,7 @@ io.on("connection", async (socket) => {
           nama: nama,
           status: "connected",
           onfocus: "didalam aplikasi",
-          limit: 3,
+          limit: 100,
           //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
@@ -297,15 +300,15 @@ io.on("connection", async (socket) => {
         nama: nama,
         status: "connected",
         onfocus: "didalam aplikasi",
-        limit: 3, // Set onFocus to 'didalam aplikasi'
+        limit: 100, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
         `${type} ${name} ${socket.id} connected to new room: ${roomName}`
       );
     }
-
-    // console.log(JSON.stringify(room, null, 2));
+    emitRoom(roomName);
+    console.log(JSON.stringify(room, null, 2));
   });
 
   socket.on("onfocus", (data) => {
@@ -339,136 +342,150 @@ io.on("connection", async (socket) => {
     }
   });
 
-  // socket.on("answer", async (data) => {
-  //   // console.log(data);
+  socket.on("answer", async (data) => {
+    // console.log(data);
 
-  //   const existingDocument = await jawaban.findOne({
-  //     id_soal: data.idsoal,
-  //     id_room: data.idroom,
-  //     id_user: data.iduser,
-  //   });
-
-  //   if (existingDocument) {
-  //     // If the document already exists
-  //     const existingQuestion = existingDocument.questions.find(
-  //       (question) => question.question_index === data.questionindex
-  //     );
-
-  //     if (existingQuestion) {
-  //       // If the question index already exists, update the answer index
-  //       await jawaban.updateOne(
-  //         {
-  //           id_soal: data.idsoal,
-  //           id_room: data.idroom,
-  //           id_user: data.iduser,
-  //           "questions.question_index": data.questionindex,
-  //         },
-  //         {
-  //           $set: {
-  //             "questions.$.answer_question": [
-  //               {
-  //                 title: data.answer["title"],
-  //                 value: data.answer["value"],
-  //                 answer_index: data.answerindex,
-  //               },
-  //             ],
-  //           },
-  //         }
-  //       );
-  //     } else {
-  //       // If the question index doesn't exist, add a new question
-  //       await jawaban.updateOne(
-  //         {
-  //           id_soal: data.idsoal,
-  //           id_room: data.idroom,
-  //           id_user: data.iduser,
-  //         },
-  //         {
-  //           $push: {
-  //             questions: {
-  //               question: data.question,
-  //               type: "type_1",
-  //               question_index: data.questionindex,
-  //               options: data.option,
-  //               answer_question: [
-  //                 {
-  //                   title: data.answer["title"],
-  //                   value: data.answer["value"],
-  //                   answer_index: data.answerindex,
-  //                 },
-  //               ],
-  //             },
-  //           },
-  //         }
-  //       );
-  //     }
-  //   } else {
-  //     // If the document doesn't exist, insert a new one
-  //     await jawaban.insertOne({
-  //       id_soal: data.idsoal,
-  //       id_room: data.idroom,
-  //       id_user: data.iduser,
-  //       questions: [
-  //         {
-  //           question: data.question,
-  //           type: "type_1",
-  //           question_index: data.questionindex,
-  //           options: data.option,
-  //           answer_question: [
-  //             {
-  //               title: data.answer["title"],
-  //               value: data.answer["value"],
-  //               answer_index: data.answerindex,
-  //             },
-  //           ],
-  //         },
-  //       ],
-  //     });
-  //   }
-  // });
-
-  socket.on("answer_new", async (data) => {
-    // Fetch the room data from the database
-    const roomData = await haikus.findOne({ title: data.room });
-    const questions = roomData.list_soal.body[0].questions;
-    var datas = data;
-    // Map questions by their index for easy access
-    const questionsMap = {};
-    questions.forEach((question) => {
-      questionsMap[question.index] = question;
+    const existingDocument = await jawaban.findOne({
+      id_soal: data.idsoal,
+      id_room: data.idroom,
+      id_user: data.iduser,
     });
 
-    let correctAnswersCount = 0;
+    if (existingDocument) {
+      // If the document already exists
+      const existingQuestion = existingDocument.questions.find(
+        (question) => question.question_index === data.questionindex
+      );
 
-    // Iterate through each answer and compare with the answer keys
-    datas.answer.forEach((answer) => {
-      const question = questionsMap[answer.questionIndex];
-      console.log(question.answer_keys);
-      // Check if the question has answer keys
-      if (question && question.answer_keys.length > 0) {
-        const correctAnswerIndex = question[0].answer_keys; // Assuming single correct answer
-        const correctAnswer = question.options[correctAnswerIndex].title; // Get the correct answer title
-        // Add the correct answer to the answer object
-        answer.status =
-          answer.answerIndex == correctAnswerIndex ? "correct" : "false";
-        if (answer.status === "correct") {
-          correctAnswersCount++;
+      if (existingQuestion) {
+        // If the question index already exists, update the answer index
+        await jawaban.updateOne(
+          {
+            id_soal: data.idsoal,
+            id_room: data.idroom,
+            id_user: data.iduser,
+            "questions.question_index": data.questionindex,
+          },
+          {
+            $set: {
+              "questions.$.answer_question": [
+                {
+                  title: data.answer["title"],
+                  value: data.answer["value"],
+                  answer_index: data.answerindex,
+                },
+              ],
+            },
+          }
+        );
+      } else {
+        // If the question index doesn't exist, add a new question
+        await jawaban.updateOne(
+          {
+            id_soal: data.idsoal,
+            id_room: data.idroom,
+            id_user: data.iduser,
+          },
+          {
+            $push: {
+              questions: {
+                question: data.question,
+                type: "type_1",
+                question_index: data.questionindex,
+                options: data.option,
+                answer_question: [
+                  {
+                    title: data.answer["title"],
+                    value: data.answer["value"],
+                    answer_index: data.answerindex,
+                  },
+                ],
+              },
+            },
+          }
+        );
+      }
+    } else {
+      // If the document doesn't exist, insert a new one
+      await jawaban.insertOne({
+        id_soal: data.idsoal,
+        id_room: data.idroom,
+        id_user: data.iduser,
+        questions: [
+          {
+            question: data.question,
+            type: "type_1",
+            question_index: data.questionindex,
+            options: data.option,
+            answer_question: [
+              {
+                title: data.answer["title"],
+                value: data.answer["value"],
+                answer_index: data.answerindex,
+              },
+            ],
+          },
+        ],
+      });
+    }
+    // socket.join(data.room); // Join the specific room
+    // Check if the participant/observer is already in the room
+    let roomIndex = room.findIndex((entry) => entry.room === data.room);
+    if (roomIndex !== -1) {
+      let participant = room[roomIndex][type].find(
+        (participant) => participant.name === data.name
+      );
+      if (participant) {
+        // If participant/observer is already in the room but disconnected, mark as connected
+        if (participant.status === "disconnected") {
+          participant.status = "connected";
+          participant.onfocus = "didalam aplikasi";
+          // Set onFocus to 'didalam aplikasi'
+          emitRoom(data.room);
+          emitUser(data.room, participant.name + "limit", participant.limit); // Emit the filtered room
+          console.log(
+            `${type} ${data.name} ${socket.id} reconnected to room: ${data.room}`
+          );
+        } else {
+          console.log(
+            `${type} ${data.name} ${socket.id} is already in room: ${data.room}`
+          );
         }
       } else {
-        answer.status = "false";
+        // Add participant/observer to the room
+        room[roomIndex][type].push({
+          name: data.name,
+          nama: data.nama,
+          status: "connected",
+          onfocus: "didalam aplikasi",
+          limit: 100,
+          //// Set onFocus to 'didalam aplikasi'
+        });
+        emitRoom(data.room); // Emit the filtered room
+        console.log(
+          `${type} ${data.name} ${socket.id} connected to room: ${data.room}`
+        );
       }
-      answer.correctAnswer = question.answer_keys[0];
-    });
-
-    // Calculate the grade out of 100
-    const totalQuestions = datas.answer.length;
-    const grade = (correctAnswersCount / totalQuestions) * 100;
-
-    // Add the grade to the data
-    datas.grade = grade;
-
-    console.log(datas);
-    return datas;
+    } else {
+      // Add new room and participant/observer
+      room.push({
+        room: data.room,
+        observer: [],
+        participant: [],
+      });
+      room[room.length - 1][type].push({
+        name: data.name,
+        nama: data.nama,
+        status: "connected",
+        onfocus: "didalam aplikasi",
+        limit: 100, // Set onFocus to 'didalam aplikasi'
+      });
+      emitRoom(data.room); // Emit the filtered room
+      console.log(
+        `${type} ${name} ${socket.id} connected to new room: ${data.room}`
+      );
+    }
+    emitRoom(data.room);
   });
 
   socket.on("kickUser", (user) => {
@@ -551,6 +568,7 @@ io.on("connection", async (socket) => {
     }
     console.log("endRoom");
   });
+
   socket.on("startRoom", async () => {
     try {
       // Check the current status of the room
@@ -574,9 +592,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             today.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - today.getTime();
@@ -598,9 +616,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             roomData.startAt.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - new Date().getTime();
@@ -641,9 +659,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             roomData.startAt.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - today.getTime();
@@ -681,7 +699,7 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("disconnecting", () => {
+  socket.on("disconnect", () => {
     // Update participant/observer's status to "disconnected" when they disconnect
     if (roomName && name) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
