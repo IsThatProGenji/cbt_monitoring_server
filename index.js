@@ -339,92 +339,136 @@ io.on("connection", async (socket) => {
     }
   });
 
-  socket.on("answer", async (data) => {
-    // console.log(data);
+  // socket.on("answer", async (data) => {
+  //   // console.log(data);
 
-    const existingDocument = await jawaban.findOne({
-      id_soal: data.idsoal,
-      id_room: data.idroom,
-      id_user: data.iduser,
+  //   const existingDocument = await jawaban.findOne({
+  //     id_soal: data.idsoal,
+  //     id_room: data.idroom,
+  //     id_user: data.iduser,
+  //   });
+
+  //   if (existingDocument) {
+  //     // If the document already exists
+  //     const existingQuestion = existingDocument.questions.find(
+  //       (question) => question.question_index === data.questionindex
+  //     );
+
+  //     if (existingQuestion) {
+  //       // If the question index already exists, update the answer index
+  //       await jawaban.updateOne(
+  //         {
+  //           id_soal: data.idsoal,
+  //           id_room: data.idroom,
+  //           id_user: data.iduser,
+  //           "questions.question_index": data.questionindex,
+  //         },
+  //         {
+  //           $set: {
+  //             "questions.$.answer_question": [
+  //               {
+  //                 title: data.answer["title"],
+  //                 value: data.answer["value"],
+  //                 answer_index: data.answerindex,
+  //               },
+  //             ],
+  //           },
+  //         }
+  //       );
+  //     } else {
+  //       // If the question index doesn't exist, add a new question
+  //       await jawaban.updateOne(
+  //         {
+  //           id_soal: data.idsoal,
+  //           id_room: data.idroom,
+  //           id_user: data.iduser,
+  //         },
+  //         {
+  //           $push: {
+  //             questions: {
+  //               question: data.question,
+  //               type: "type_1",
+  //               question_index: data.questionindex,
+  //               options: data.option,
+  //               answer_question: [
+  //                 {
+  //                   title: data.answer["title"],
+  //                   value: data.answer["value"],
+  //                   answer_index: data.answerindex,
+  //                 },
+  //               ],
+  //             },
+  //           },
+  //         }
+  //       );
+  //     }
+  //   } else {
+  //     // If the document doesn't exist, insert a new one
+  //     await jawaban.insertOne({
+  //       id_soal: data.idsoal,
+  //       id_room: data.idroom,
+  //       id_user: data.iduser,
+  //       questions: [
+  //         {
+  //           question: data.question,
+  //           type: "type_1",
+  //           question_index: data.questionindex,
+  //           options: data.option,
+  //           answer_question: [
+  //             {
+  //               title: data.answer["title"],
+  //               value: data.answer["value"],
+  //               answer_index: data.answerindex,
+  //             },
+  //           ],
+  //         },
+  //       ],
+  //     });
+  //   }
+  // });
+
+  socket.on("answer_new", async (data) => {
+    // Fetch the room data from the database
+    const roomData = await haikus.findOne({ title: data.room });
+    const questions = roomData.list_soal.body[0].questions;
+    var datas = data;
+    // Map questions by their index for easy access
+    const questionsMap = {};
+    questions.forEach((question) => {
+      questionsMap[question.index] = question;
     });
 
-    if (existingDocument) {
-      // If the document already exists
-      const existingQuestion = existingDocument.questions.find(
-        (question) => question.question_index === data.questionindex
-      );
+    let correctAnswersCount = 0;
 
-      if (existingQuestion) {
-        // If the question index already exists, update the answer index
-        await jawaban.updateOne(
-          {
-            id_soal: data.idsoal,
-            id_room: data.idroom,
-            id_user: data.iduser,
-            "questions.question_index": data.questionindex,
-          },
-          {
-            $set: {
-              "questions.$.answer_question": [
-                {
-                  title: data.answer["title"],
-                  value: data.answer["value"],
-                  answer_index: data.answerindex,
-                },
-              ],
-            },
-          }
-        );
+    // Iterate through each answer and compare with the answer keys
+    datas.answer.forEach((answer) => {
+      const question = questionsMap[answer.questionIndex];
+      console.log(question.answer_keys);
+      // Check if the question has answer keys
+      if (question && question.answer_keys.length > 0) {
+        const correctAnswerIndex = question[0].answer_keys; // Assuming single correct answer
+        const correctAnswer = question.options[correctAnswerIndex].title; // Get the correct answer title
+        // Add the correct answer to the answer object
+        answer.status =
+          answer.answerIndex == correctAnswerIndex ? "correct" : "false";
+        if (answer.status === "correct") {
+          correctAnswersCount++;
+        }
       } else {
-        // If the question index doesn't exist, add a new question
-        await jawaban.updateOne(
-          {
-            id_soal: data.idsoal,
-            id_room: data.idroom,
-            id_user: data.iduser,
-          },
-          {
-            $push: {
-              questions: {
-                question: data.question,
-                type: "type_1",
-                question_index: data.questionindex,
-                options: data.option,
-                answer_question: [
-                  {
-                    title: data.answer["title"],
-                    value: data.answer["value"],
-                    answer_index: data.answerindex,
-                  },
-                ],
-              },
-            },
-          }
-        );
+        answer.status = "false";
       }
-    } else {
-      // If the document doesn't exist, insert a new one
-      await jawaban.insertOne({
-        id_soal: data.idsoal,
-        id_room: data.idroom,
-        id_user: data.iduser,
-        questions: [
-          {
-            question: data.question,
-            type: "type_1",
-            question_index: data.questionindex,
-            options: data.option,
-            answer_question: [
-              {
-                title: data.answer["title"],
-                value: data.answer["value"],
-                answer_index: data.answerindex,
-              },
-            ],
-          },
-        ],
-      });
-    }
+      answer.correctAnswer = question.answer_keys[0];
+    });
+
+    // Calculate the grade out of 100
+    const totalQuestions = datas.answer.length;
+    const grade = (correctAnswersCount / totalQuestions) * 100;
+
+    // Add the grade to the data
+    datas.grade = grade;
+
+    console.log(datas);
+    return datas;
   });
 
   socket.on("kickUser", (user) => {
