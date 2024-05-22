@@ -277,7 +277,7 @@ io.on("connection", async (socket) => {
           nama: nama,
           status: "connected",
           onfocus: "didalam aplikasi",
-          limit: 3,
+          limit: 100,
           //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
@@ -297,7 +297,7 @@ io.on("connection", async (socket) => {
         nama: nama,
         status: "connected",
         onfocus: "didalam aplikasi",
-        limit: 3, // Set onFocus to 'didalam aplikasi'
+        limit: 100, // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
@@ -445,19 +445,19 @@ io.on("connection", async (socket) => {
       const question = questionsMap[answer.questionIndex];
       console.log(question.answer_keys);
       // Check if the question has answer keys
-      if (question && question.answer_keys.length > 0) {
-        const correctAnswerIndex = question[0].answer_keys; // Assuming single correct answer
+      if (question) {
+        const correctAnswerIndex = question.answer_keys.index.toString(); // Assuming single correct answer
         const correctAnswer = question.options[correctAnswerIndex].title; // Get the correct answer title
         // Add the correct answer to the answer object
+        // answer.status =
+        //   answer.answerIndex === question.answer_keys.index.toString() ? "correct" : "false";
         answer.status =
-          answer.answerIndex == correctAnswerIndex ? "correct" : "false";
+          answer.answerIndex === question.answer_keys.index.toString() ? "correct" : "false";
         if (answer.status === "correct") {
           correctAnswersCount++;
         }
-      } else {
-        answer.status = "false";
       }
-      answer.correctAnswer = question.answer_keys[0];
+      answer.correctAnswerIndex = question.answer_keys.index.toString();
     });
 
     // Calculate the grade out of 100
@@ -465,7 +465,7 @@ io.on("connection", async (socket) => {
     const grade = (correctAnswersCount / totalQuestions) * 100;
 
     // Add the grade to the data
-    datas.grade = grade;
+    datas.grade = grade
 
     console.log(datas);
     return datas;
