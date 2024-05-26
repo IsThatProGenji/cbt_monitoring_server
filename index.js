@@ -22,6 +22,7 @@ const client = new MongoClient(uri);
 const database = client.db("monitoring");
 const haikus = database.collection("room");
 const jawaban = database.collection("jawaban");
+const jawaban_new = database.collection("jawaban_new");
 const simulateAsyncPause = () =>
   new Promise((resolve) => {
     setTimeout(() => resolve(), 1000);
@@ -111,9 +112,9 @@ app.post("/joinRoom", async (req, res) => {
         // Calculate the end time based on the start date and duration
         const endTime = new Date(
           roomData.startAt.getTime() +
-          roomData.duration.hours * 3600000 +
-          roomData.duration.minutes * 60000 +
-          roomData.duration.seconds * 1000
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
         );
         // Calculate the remaining time in milliseconds
         const durationMs = endTime.getTime() - new Date().getTime();
@@ -141,7 +142,7 @@ app.post("/joinRoom", async (req, res) => {
 
         // Fetch the response list jawaban if id_user, id_soal, and id_room are found
         try {
-          const jawabanData = await jawaban.findOne(
+          const jawabanData = await jawaban_new.findOne(
             {
               id_soal: parseInt(roomData.idsoal),
               id_room: parseInt(roomData.idroom),
@@ -149,18 +150,20 @@ app.post("/joinRoom", async (req, res) => {
             },
             {
               _id: 0, // Exclude the _id field from the result
-              "questions.question_index": 1, // Include only the question_index field
-              "questions.answer_question.answer_index": 1, // Include only the answer_index field inside the answer_question array
+              "answer.questionIndex": 1, // Include only the questionIndex field in the answer array
+              "answer.answerIndex": 1, // Include only the answerIndex field in the answer array
+              "answer.answerTitle": 1, // Include the answerTitle field in the answer array
             }
           );
 
-          if (jawabanData && jawabanData.questions.length > 0) {
-            const jawaban = jawabanData.questions.map((question) => ({
-              question_index: question.question_index,
-              answer_index: question.answer_question[0].answer_index,
-              answer_title: question.answer_question[0].title,
-              // Assuming there's only one answer per question
-            }));
+          if (jawabanData && jawabanData.answer.length > 0) {
+            const jawaban = jawabanData.answer
+              .filter((ans) => parseInt(ans.answerIndex) !== 0) // Filter out answers with answerIndex of 0
+              .map((ans) => ({
+                question_index: ans.questionIndex,
+                answer_index: parseInt(ans.answerIndex),
+                answer_title: ans.answerTitle,
+              }));
 
             console.log("Jawaban data found:", jawabanData);
             // Send a response back to the client with status 200
@@ -189,10 +192,12 @@ app.post("/joinRoom", async (req, res) => {
             });
           }
         } catch (error) {
-          console.error("Error occurred while fetching jawaban data:", error);
-          res
-            .status(500)
-            .send({ message: "Internal server error", status: 500, type: "" });
+          console.error("Error fetching jawaban data:", error);
+          // Send a response back to the client with status 500 in case of an error
+          res.status(500).send({
+            message: "An error occurred while fetching jawaban data",
+            status: 500,
+          });
         }
       } else if (
         roomData.whitelist_observer &&
@@ -304,8 +309,45 @@ io.on("connection", async (socket) => {
         `${type} ${name} ${socket.id} connected to new room: ${roomName}`
       );
     }
+    emitRoom(roomName);
+    const roomData = await haikus.findOne({ title: roomName });
 
+    if (roomData) {
+      let countdown = {};
+      if (roomData.status === "live") {
+        // Calculate the end time based on the start date and duration
+        const endTime = new Date(
+          roomData.startAt.getTime() +
+            roomData.duration.hours * 3600000 +
+            roomData.duration.minutes * 60000 +
+            roomData.duration.seconds * 1000
+        );
+        // Calculate the remaining time in milliseconds
+        const durationMs = endTime.getTime() - new Date().getTime();
+        // Convert milliseconds to hours, minutes, and seconds
+        countdown.hours = Math.floor(durationMs / (1000 * 60 * 60));
+        countdown.minutes = Math.floor(
+          (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+        );
+        countdown.seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+      } else {
+        countdown.hours = 0;
+        countdown.minutes = 0;
+        countdown.seconds = 0;
+      }
+      // Emit the countdown
+      io.to(roomName).emit("countdown", {
+        hours: countdown.hours,
+        minutes: countdown.minutes,
+        seconds: countdown.seconds,
+      });
+      emitRoom(roomName);
+      // console.log(JSON.stringify(room, null, 2));
+    }
     // console.log(JSON.stringify(room, null, 2));
+  });
+  socket.on("leaveRoom", () => {
+    socket.leave(roomName); // Leave the specific room
   });
 
   socket.on("onfocus", (data) => {
@@ -426,49 +468,73 @@ io.on("connection", async (socket) => {
   //     });
   //   }
   // });
-
   socket.on("answer_new", async (data) => {
-    // Fetch the room data from the database
-    const roomData = await haikus.findOne({ title: data.room });
-    const questions = roomData.list_soal.body[0].questions;
-    var datas = data;
-    // Map questions by their index for easy access
-    const questionsMap = {};
-    questions.forEach((question) => {
-      questionsMap[question.index] = question;
-    });
+    try {
+      // Fetch the room data from the database
+      const roomData = await haikus.findOne({ title: data.room });
+      const questions = roomData.list_soal.body[0].questions;
+      var datas = data;
 
-    let correctAnswersCount = 0;
+      // Map questions by their index for easy access
+      const questionsMap = {};
+      questions.forEach((question) => {
+        questionsMap[question.index] = question;
+      });
 
-    // Iterate through each answer and compare with the answer keys
-    datas.answer.forEach((answer) => {
-      const question = questionsMap[answer.questionIndex];
-      console.log(question.answer_keys);
-      // Check if the question has answer keys
-      if (question) {
-        const correctAnswerIndex = question.answer_keys.index.toString(); // Assuming single correct answer
-        const correctAnswer = question.options[correctAnswerIndex].title; // Get the correct answer title
-        // Add the correct answer to the answer object
-        // answer.status =
-        //   answer.answerIndex === question.answer_keys.index.toString() ? "correct" : "false";
-        answer.status =
-          answer.answerIndex === question.answer_keys.index.toString() ? "correct" : "false";
-        if (answer.status === "correct") {
-          correctAnswersCount++;
+      let correctAnswersCount = 0;
+
+      // Iterate through each answer and compare with the answer keys
+      datas.answer.forEach((answer) => {
+        const question = questionsMap[answer.questionIndex];
+        console.log(question.answer_keys);
+        var correctAnswerIndex = "";
+        // Check if the question has answer keys
+        if (question) {
+          if (
+            question.answer_keys &&
+            question.answer_keys.index !== undefined &&
+            question.answer_keys.index !== null
+          ) {
+            var correctAnswerIndex = question.answer_keys.index.toString();
+            // Now you can safely use correctAnswerIndex
+          } // Assuming single correct answer
+          console.log(question.answer_keys.index);
+          // Update the answer status
+          answer.status =
+            answer.answerIndex === correctAnswerIndex ? "correct" : "false";
+          if (answer.status === "correct") {
+            correctAnswersCount++;
+          }
+
+          // Add correct answer details to the answer object
+          answer.correctAnswerIndex = correctAnswerIndex;
+          answer.correctAnswerTitle = question.answer_keys.title;
         }
-      }
-      answer.correctAnswerIndex = question.answer_keys.index.toString();
-    });
+      });
 
-    // Calculate the grade out of 100
-    const totalQuestions = datas.answer.length;
-    const grade = (correctAnswersCount / totalQuestions) * 100;
+      // Calculate the grade out of 100
+      const totalQuestions = datas.answer.length;
+      const grade = (correctAnswersCount / totalQuestions) * 100;
 
-    // Add the grade to the data
-    datas.grade = grade
+      // Add the grade to the data
+      datas.grade = grade;
 
-    console.log(datas);
-    return datas;
+      // Upsert the data into the jawaban_new collection
+      await jawaban_new.updateOne(
+        {
+          id_soal: data.id_soal,
+          id_room: data.id_room,
+          id_user: data.id_user,
+        },
+        { $set: datas },
+        { upsert: true }
+      );
+
+      console.log("Data upserted successfully:", datas);
+    } catch (error) {
+      console.error("Error processing answer_new event:", error);
+    }
+    // console.log(data);
   });
 
   socket.on("kickUser", (user) => {
@@ -551,6 +617,7 @@ io.on("connection", async (socket) => {
     }
     console.log("endRoom");
   });
+
   socket.on("startRoom", async () => {
     try {
       // Check the current status of the room
@@ -574,9 +641,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             today.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - today.getTime();
@@ -598,9 +665,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             roomData.startAt.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - new Date().getTime();
@@ -641,9 +708,9 @@ io.on("connection", async (socket) => {
           // Calculate the end time based on the start date and duration
           const endTime = new Date(
             roomData.startAt.getTime() +
-            roomData.duration.hours * 3600000 +
-            roomData.duration.minutes * 60000 +
-            roomData.duration.seconds * 1000
+              roomData.duration.hours * 3600000 +
+              roomData.duration.minutes * 60000 +
+              roomData.duration.seconds * 1000
           );
           // Calculate the remaining time in milliseconds
           const durationMs = endTime.getTime() - today.getTime();
