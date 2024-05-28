@@ -282,7 +282,7 @@ io.on("connection", async (socket) => {
           nama: nama,
           status: "Connected",
           onfocus: "Didalam Aplikasi",
-          limit: 100,
+          limit: 3,
           answered: 0,
           //// Set onFocus to 'didalam aplikasi'
         });
@@ -303,7 +303,7 @@ io.on("connection", async (socket) => {
         nama: nama,
         status: "Connected",
         onfocus: "Didalam Aplikasi",
-        limit: 100, // Set onFocus to 'didalam aplikasi'
+        limit: 3, // Set onFocus to 'didalam aplikasi'
         answered: 0,
       });
       emitRoom(roomName); // Emit the filtered room
