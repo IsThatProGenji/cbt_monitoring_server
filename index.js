@@ -17,7 +17,7 @@ const httpServer = createServer(app); // Changed instantiation
 app.use(express.static(path.join(__dirname, "public")));
 
 const uri =
-  "mongodb://root:password@157.15.164.54:27017/?directConnection=true&appName=mongosh+2.1.3&authSource=admin&replicaSet=rs0";
+  "mongodb://admin:password@157.15.164.53:27017/?serverSelectionTimeoutMS=2000&appName=mongosh+2.1.3&authSource=admin&replicaSet=rs0&directConnection=true";
 const client = new MongoClient(uri);
 const database = client.db("monitoring");
 const haikus = database.collection("room");
@@ -261,9 +261,9 @@ io.on("connection", async (socket) => {
       );
       if (participant) {
         // If participant/observer is already in the room but disconnected, mark as connected
-        if (participant.status === "disconnected") {
-          participant.status = "connected";
-          participant.onfocus = "didalam aplikasi";
+        if (participant.status === "Disconnected") {
+          participant.status = "Connected";
+          participant.onfocus = "Didalam Aplikasi";
           // Set onFocus to 'didalam aplikasi'
           emitRoom(roomName);
           emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
@@ -280,9 +280,10 @@ io.on("connection", async (socket) => {
         room[roomIndex][type].push({
           name: name,
           nama: nama,
-          status: "connected",
-          onfocus: "didalam aplikasi",
+          status: "Connected",
+          onfocus: "Didalam Aplikasi",
           limit: 100,
+          answered: 0,
           //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
@@ -300,9 +301,10 @@ io.on("connection", async (socket) => {
       room[room.length - 1][type].push({
         name: name,
         nama: nama,
-        status: "connected",
-        onfocus: "didalam aplikasi",
+        status: "Connected",
+        onfocus: "Didalam Aplikasi",
         limit: 100, // Set onFocus to 'didalam aplikasi'
+        answered: 0,
       });
       emitRoom(roomName); // Emit the filtered room
       console.log(
@@ -363,7 +365,7 @@ io.on("connection", async (socket) => {
 
           if (
             room[roomIndex].participant[participantIndex].limit > 0 &&
-            data === "diluar aplikasi"
+            data === "Diluar Aplikasi"
           ) {
             room[roomIndex].participant[participantIndex].limit =
               room[roomIndex].participant[participantIndex].limit - 1;
@@ -482,12 +484,14 @@ io.on("connection", async (socket) => {
       });
 
       let correctAnswersCount = 0;
+      let answeredQuestionsCount = 0; // Variable to count answered questions
 
       // Iterate through each answer and compare with the answer keys
       datas.answer.forEach((answer) => {
         const question = questionsMap[answer.questionIndex];
         console.log(question.answer_keys);
         var correctAnswerIndex = "";
+
         // Check if the question has answer keys
         if (question) {
           if (
@@ -499,6 +503,7 @@ io.on("connection", async (socket) => {
             // Now you can safely use correctAnswerIndex
           } // Assuming single correct answer
           console.log(question.answer_keys.index);
+
           // Update the answer status
           answer.status =
             answer.answerIndex === correctAnswerIndex ? "correct" : "false";
@@ -509,15 +514,27 @@ io.on("connection", async (socket) => {
           // Add correct answer details to the answer object
           answer.correctAnswerIndex = correctAnswerIndex;
           answer.correctAnswerTitle = question.answer_keys.title;
+
+          // Check if the question has been answered
+          if (answer.answerIndex !== "0") {
+            answeredQuestionsCount++;
+          }
         }
       });
-
+      let roomIndex = room.findIndex((entry) => entry.room === roomName);
+      let participantIndex = room[roomIndex].participant.findIndex(
+        (participant) => participant.name === name
+      );
+      room[roomIndex].participant[participantIndex].answered =
+        answeredQuestionsCount;
+      emitRoom(roomName);
       // Calculate the grade out of 100
       const totalQuestions = datas.answer.length;
       const grade = (correctAnswersCount / totalQuestions) * 100;
 
-      // Add the grade to the data
+      // Add the grade and answered questions count to the data
       datas.grade = grade;
+      datas.answeredQuestionsCount = answeredQuestionsCount; // Add the answered questions count to datas
 
       // Upsert the data into the jawaban_new collection
       await jawaban_new.updateOne(
@@ -538,6 +555,12 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("kickUser", (user) => {
+    let roomIndex = room.findIndex((entry) => entry.room === roomName);
+    let participantIndex = room[roomIndex].participant.findIndex(
+      (participant) => participant.name === user
+    );
+    room[roomIndex].participant[participantIndex].limit = 0;
+    emitRoom(roomName);
     emitUser(roomName, user + "kick", "kicked");
   });
   socket.on("resetUser", (userName) => {
@@ -771,9 +794,9 @@ io.on("connection", async (socket) => {
           // }
 
           room[roomIndex][disconnectingType][disconnectingIndex].status =
-            "disconnected";
+            "Disconnected";
           room[roomIndex][disconnectingType][disconnectingIndex].onfocus =
-            "diluar aplikasi"; // Set onFocus to 'diluar aplikasi'
+            "Diluar Aplikasi"; // Set onFocus to 'diluar aplikasi'
         }
       }
     }
