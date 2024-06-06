@@ -87,7 +87,7 @@ const io = new Server(httpServer, {
 // Parse URL-encoded bodies (as sent by HTML forms)
 app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
 app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
-app.post("/joinRoom", async (req, res) => {
+app.post("/joinRoom1", async (req, res) => {
   console.log("Join Room");
   // Extract room, key, and user_id from request body
   const { room, key, user_id } = req.body; // Changed from user to user_id
