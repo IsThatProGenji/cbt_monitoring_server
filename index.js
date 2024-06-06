@@ -261,10 +261,7 @@ io.on("connection", async (socket) => {
       );
       if (participant) {
         // If participant/observer is already in the room but disconnected, mark as connected
-        if (
-          participant.status === "Disconnected" ||
-          participant.status === "Finished"
-        ) {
+        if (participant.status === "Disconnected") {
           participant.status = "Connected";
           participant.onfocus = "Didalam Aplikasi";
           // Set onFocus to 'didalam aplikasi'
@@ -310,11 +307,13 @@ io.on("connection", async (socket) => {
         answered: 0,
       });
       emitRoom(roomName); // Emit the filtered room
+
       console.log(
         `${type} ${name} ${socket.id} connected to new room: ${roomName}`
       );
     }
     emitRoom(roomName);
+    emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
     const roomData = await haikus.findOne({ title: roomName });
 
     if (roomData) {
