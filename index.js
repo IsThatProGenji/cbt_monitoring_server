@@ -261,7 +261,10 @@ io.on("connection", async (socket) => {
       );
       if (participant) {
         // If participant/observer is already in the room but disconnected, mark as connected
-        if (participant.status === "Disconnected") {
+        if (
+          participant.status === "Disconnected" ||
+          participant.status === "Finished"
+        ) {
           participant.status = "Connected";
           participant.onfocus = "Didalam Aplikasi";
           // Set onFocus to 'didalam aplikasi'
