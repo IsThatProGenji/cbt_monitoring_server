@@ -275,6 +275,7 @@ io.on("connection", async (socket) => {
             `${type} ${name} ${socket.id} is already in room: ${roomName}`
           );
         }
+        emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
       } else {
         // Add participant/observer to the room
         room[roomIndex][type].push({
@@ -313,7 +314,7 @@ io.on("connection", async (socket) => {
       );
     }
     emitRoom(roomName);
-    emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
+
     const roomData = await haikus.findOne({ title: roomName });
 
     if (roomData) {
