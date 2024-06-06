@@ -275,7 +275,6 @@ io.on("connection", async (socket) => {
             `${type} ${name} ${socket.id} is already in room: ${roomName}`
           );
         }
-        emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
       } else {
         // Add participant/observer to the room
         room[roomIndex][type].push({
@@ -566,7 +565,9 @@ io.on("connection", async (socket) => {
     room[roomIndex].participant[participantIndex].status = "Finished";
 
     console.log(`Finish ${user}'s limit to 0`);
+
     emitRoom(roomName);
+    emitUser(roomName, name + "limit", 0); // Emit the filtered room
   });
 
   socket.on("kickUser", (user) => {
