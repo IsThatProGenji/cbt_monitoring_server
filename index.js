@@ -554,6 +554,18 @@ io.on("connection", async (socket) => {
     // console.log(data);
   });
 
+  socket.on("finishUser", (user) => {
+    let roomIndex = room.findIndex((entry) => entry.room === roomName);
+    let participantIndex = room[roomIndex].participant.findIndex(
+      (participant) => participant.name === name
+    );
+    room[roomIndex].participant[participantIndex].limit = 0;
+    room[roomIndex].participant[participantIndex].status = "Finished";
+
+    console.log(`Finish ${user}'s limit to 0`);
+    emitRoom(roomName);
+  });
+
   socket.on("kickUser", (user) => {
     let roomIndex = room.findIndex((entry) => entry.room === roomName);
     let participantIndex = room[roomIndex].participant.findIndex(
