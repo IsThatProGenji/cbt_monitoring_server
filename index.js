@@ -573,8 +573,14 @@ io.on("connection", async (socket) => {
     let participantIndex = room[roomIndex].participant.findIndex(
       (participant) => participant.name === name
     );
-    room[roomIndex].participant[participantIndex].status = "Finished";
+
+    room[roomIndex].participant[participantIndex].status = "Disconnected";
     room[roomIndex].participant[participantIndex].limit = 0;
+    emitUser(
+      roomName,
+      room[roomIndex].participant[participantIndex].name + "limit",
+      room[roomIndex].participant[participantIndex].limit
+    );
     console.log(`Finish ${name}'s limit to 0`);
 
     emitRoom(roomName);
