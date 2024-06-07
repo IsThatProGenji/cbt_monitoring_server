@@ -571,12 +571,12 @@ io.on("connection", async (socket) => {
   socket.on("finishUser", (user) => {
     let roomIndex = room.findIndex((entry) => entry.room === roomName);
     let participantIndex = room[roomIndex].participant.findIndex(
-      (participant) => participant.name === user
+      (participant) => participant.name === name
     );
-    room[roomIndex].participant[participantIndex].limit = 0;
-
-    console.log(`Finish ${user}'s limit to 0`);
     room[roomIndex].participant[participantIndex].status = "Finished";
+    room[roomIndex].participant[participantIndex].limit = 0;
+    console.log(`Finish ${name}'s limit to 0`);
+
     emitRoom(roomName);
   });
 
