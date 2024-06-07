@@ -571,7 +571,7 @@ io.on("connection", async (socket) => {
   socket.on("finishUser", (user) => {
     let roomIndex = room.findIndex((entry) => entry.room === roomName);
     let participantIndex = room[roomIndex].participant.findIndex(
-      (participant) => participant.name === name
+      (participant) => participant.name === user
     );
     room[roomIndex].participant[participantIndex].limit = 0;
 
