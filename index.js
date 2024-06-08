@@ -264,21 +264,10 @@ io.on("connection", async (socket) => {
         if (participant.status === "Disconnected") {
           participant.status = "Connected";
           participant.onfocus = "Didalam Aplikasi";
+
           // Set onFocus to 'didalam aplikasi'
           emitRoom(roomName);
           emitUser(roomName, participant.name + "limit", participant.limit); // Emit the filtered room
-          console.log(
-            `${type} ${name} ${socket.id} reconnected to room: ${roomName}`
-          );
-        } else {
-          console.log(
-            `${type} ${name} ${socket.id} is already in room: ${roomName}`
-          );
-        }
-        if (participant.status === "Finished") {
-          // Set onFocus to 'didalam aplikasi'
-          emitRoom(roomName);
-          emitUser(roomName, participant.name + "limit", 0); // Emit the filtered room
           console.log(
             `${type} ${name} ${socket.id} reconnected to room: ${roomName}`
           );
@@ -296,6 +285,7 @@ io.on("connection", async (socket) => {
           onfocus: "Didalam Aplikasi",
           limit: 3,
           answered: 0,
+          isfinish: "no", // Set onFocus to 'didalam aplikasi'
           //// Set onFocus to 'didalam aplikasi'
         });
         emitRoom(roomName); // Emit the filtered room
@@ -317,6 +307,7 @@ io.on("connection", async (socket) => {
         onfocus: "Didalam Aplikasi",
         limit: 3, // Set onFocus to 'didalam aplikasi'
         answered: 0,
+        isfinish: "no", // Set onFocus to 'didalam aplikasi'
       });
       emitRoom(roomName); // Emit the filtered room
 
@@ -573,17 +564,12 @@ io.on("connection", async (socket) => {
     let participantIndex = room[roomIndex].participant.findIndex(
       (participant) => participant.name === name
     );
-
-    room[roomIndex].participant[participantIndex].status = "Disconnected";
     room[roomIndex].participant[participantIndex].limit = 0;
-    emitUser(
-      roomName,
-      room[roomIndex].participant[participantIndex].name + "limit",
-      room[roomIndex].participant[participantIndex].limit
-    );
-    console.log(`Finish ${name}'s limit to 0`);
 
+    room[roomIndex].participant[participantIndex].isfinish = "yes";
     emitRoom(roomName);
+    emitUser(roomName, name + "finish", "finish");
+    console.log(`Finish ${name}'s limit to 0`);
   });
 
   socket.on("kickUser", (user) => {
