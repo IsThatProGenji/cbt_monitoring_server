@@ -560,27 +560,46 @@ io.on("connection", async (socket) => {
   });
 
   socket.on("finishUser", (user) => {
-    let roomIndex = room.findIndex((entry) => entry.room === roomName);
-    let participantIndex = room[roomIndex].participant.findIndex(
-      (participant) => participant.name === name
-    );
-    room[roomIndex].participant[participantIndex].limit = 0;
+    if (name !== null) {
+        let roomIndex = room.findIndex((entry) => entry.room === roomName);
+        let participantIndex = room[roomIndex].participant.findIndex(
+            (participant) => participant.name === name
+        );
+        
+        if (participantIndex !== -1) { // Check if participant is found
+            room[roomIndex].participant[participantIndex].limit = 0;
+            room[roomIndex].participant[participantIndex].isfinish = "yes";
+            emitRoom(roomName);
+            emitUser(roomName, name + "finish", "finish");
+            console.log(`Finish ${name}'s limit to 0`);
+        } else {
+            console.log(`Participant with name ${name} not found`);
+        }
+    } else {
+        console.log(`Name is null`);
+    }
+});
 
-    room[roomIndex].participant[participantIndex].isfinish = "yes";
-    emitRoom(roomName);
-    emitUser(roomName, name + "finish", "finish");
-    console.log(`Finish ${name}'s limit to 0`);
-  });
+socket.on("kickUser", (user) => {
+  if (user !== null) {
+      let roomIndex = room.findIndex((entry) => entry.room === roomName);
+      let participantIndex = room[roomIndex].participant.findIndex(
+          (participant) => participant.name === user
+      );
+      
+      if (participantIndex !== -1) { // Check if participant is found
+          room[roomIndex].participant[participantIndex].limit = 0;
+          emitRoom(roomName);
+          emitUser(roomName, user + "kick", "kicked");
+          console.log(`Kicked ${user} and set their limit to 0`);
+      } else {
+          console.log(`Participant with name ${user} not found`);
+      }
+  } else {
+      console.log(`User is null`);
+  }
+});
 
-  socket.on("kickUser", (user) => {
-    let roomIndex = room.findIndex((entry) => entry.room === roomName);
-    let participantIndex = room[roomIndex].participant.findIndex(
-      (participant) => participant.name === user
-    );
-    room[roomIndex].participant[participantIndex].limit = 0;
-    emitRoom(roomName);
-    emitUser(roomName, user + "kick", "kicked");
-  });
   socket.on("resetUser", (userName) => {
     if (roomName && userName) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
