@@ -183,10 +183,10 @@ app.get("/getRoomObserver", async (req, res) => {
 });
 app.post("/joinRoom1", async (req, res) => {
   console.log("Join Room");
-  // Extract room, key, and user_id from request body
-  const { room, key, user_id } = req.body; // Changed from user to user_id
+  // Extract room and user_id from request body
+  const { room, user_id } = req.body; // Changed from user to user_id
   // Log the values to check if they are received correctly
-  console.log("Received data - user_id:", user_id, "room:", room, "key:", key); // Updated from user to user_id
+  console.log("Received data - user_id:", user_id, "room:", room); // Updated from user to user_id
 
   try {
     // Check if the user is in the whitelist for the specified room
@@ -226,10 +226,9 @@ app.post("/joinRoom1", async (req, res) => {
           countdown.seconds > 0) &&
         roomData.whitelist_partisipant &&
         roomData.whitelist_partisipant.some((item) => item.id == user_id) && // Changed from user to user_id
-        roomData.key === key &&
         roomData.status === "live"
       ) {
-        // User is in the participant whitelist, key matches, and countdown is greater than 0
+        // User is in the participant whitelist, and countdown is greater than 0
         console.log(
           `${user_id} is in the participant whitelist for room ${room}`
         ); // Updated from user to user_id
@@ -259,10 +258,10 @@ app.post("/joinRoom1", async (req, res) => {
                 answer_title: ans.answerTitle,
               }));
 
-            console.log("Jawaban data found:", jawabanData);
+            // console.log("Jawaban data found:", jawabanData);
             // Send a response back to the client with status 200
             res.status(200).send({
-              message: `User ${user_id} joined room ${room} as a participant with key ${key}`,
+              message: `User ${user_id} joined room ${room} as a participant`,
               status: 200,
               type: "participant",
               idsoal: roomData.idsoal,
@@ -275,7 +274,7 @@ app.post("/joinRoom1", async (req, res) => {
             console.log("No jawaban data found for the user");
             // Send a response back to the client with status 200 but without jawaban data
             res.status(200).send({
-              message: `User ${user_id} joined room ${room} as a participant with key ${key}`,
+              message: `User ${user_id} joined room ${room} as a participant`,
               status: 200,
               type: "participant",
               idsoal: roomData.idsoal,
@@ -295,22 +294,21 @@ app.post("/joinRoom1", async (req, res) => {
         }
       } else if (
         roomData.whitelist_observer &&
-        roomData.whitelist_observer.some((item) => item.id == user_id) && // Changed from user to user_id
-        roomData.key === key
+        roomData.whitelist_observer.some((item) => item.id == user_id) // Changed from user to user_id
       ) {
-        // User is in the observer whitelist and key matches
+        // User is in the observer whitelist
         console.log(`${user_id} is in the observer whitelist for room ${room}`); // Updated from user to user_id
         // Send a response back to the client with status 200
         res.status(200).send({
-          message: `User ${user_id} joined room ${room} as an observer with key ${key}`, // Updated from user to user_id
+          message: `User ${user_id} joined room ${room} as an observer`, // Updated from user to user_id
           status: 200,
           type: "observer",
           countdown: countdown ?? {},
         });
       } else {
-        // User is not in either whitelist or key does not match
+        // User is not in either whitelist
         console.log(
-          `${user_id} is not in the whitelist for room ${room} as participant or observer, or key is incorrect`
+          `${user_id} is not in the whitelist for room ${room} as participant or observer`
         );
         res.status(403).send({
           message: `User ${user_id} is not authorized to join room ${room}`, // Updated from user to user_id
@@ -525,8 +523,9 @@ io.on("connection", async (socket) => {
 
           // Add correct answer details to the answer object
           answer.correctAnswerIndex = correctAnswerIndex;
-          answer.correctAnswerTitle = question.answer_keys.title;
-
+          answer.correctAnswerTitle = question.answer_keys.title != null
+          ? question.answer_keys.title
+          : 'null';
           // Check if the question has been answered
           if (answer.answerIndex !== "0") {
             answeredQuestionsCount++;

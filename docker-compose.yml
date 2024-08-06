@@ -1,0 +1,10 @@
+version: '3'
+services:
+  app:
+    build: .
+    ports:
+      - "3500:3500" # Map the container port to the host port
+    restart: always # Automatically restart the container on failure
+    volumes:
+      - .:/app
+      - /app/node_modules
