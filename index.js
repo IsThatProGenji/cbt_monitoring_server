@@ -50,24 +50,6 @@ async function run() {
 
     // Pause before inserting a document
     await simulateAsyncPause();
-    // Insert a new document into the collection
-    // await haikus.updateOne(
-    //   { title: "room1" }, // Specify the filter for the document to update
-    //   {
-    //     $set: {
-    //       participant: ["rio"],
-    //       content: "Updated content here", // Update the content field
-    //     },
-    //   }
-    // );
-    // await haikus.insertOne({
-    //   // Corrected variable name
-    //   title: "Record of a Shriveled Datum",
-    //   content: "No bytes, no problem. Just insert a document, in MongoDB",
-    // });
-    // Pause before closing the change stream
-    // await simulateAsyncPause();
-    // Close the change stream and print a message to the console when it is closed
   } finally {
     // Close the database connection on completion or error
   }
@@ -86,7 +68,119 @@ const io = new Server(httpServer, {
 
 // Parse URL-encoded bodies (as sent by HTML forms)
 app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
-app.use(express.urlencoded({ extended: true })); // Changed to express.urlencoded
+
+const calculateCountdown = (startAt, duration) => {
+  if (!startAt || !duration) {
+    return false;
+  }
+  const endTime = new Date(
+    startAt.getTime() +
+      duration.hours * 3600000 +
+      duration.minutes * 60000 +
+      duration.seconds * 1000
+  );
+  const durationMs = endTime.getTime() - new Date().getTime();
+  return durationMs > 0;
+};
+const calculateCountdownWithBuffer = (startAt, duration) => {
+  if (!startAt || !duration) {
+    return false;
+  }
+
+  const endTime = new Date(
+    startAt.getTime() +
+      duration.hours * 3600000 +
+      duration.minutes * 60000 +
+      duration.seconds * 1000 +
+      5 * 60000 // Adding 5 minutes buffer
+  );
+  const durationMs = endTime.getTime() - new Date().getTime();
+  return durationMs > 0;
+};
+app.get("/getRoomParticipant", async (req, res) => {
+  console.log("Get Room");
+  const { user_id } = req.body;
+
+  try {
+    console.log("User ID:", user_id);
+    const allRooms = await haikus
+      .find({
+        whitelist_partisipant: { $elemMatch: { id: parseInt(user_id, 10) } },
+        status: "live",
+      })
+      .project({
+        title: 1,
+        soal: 1,
+        whitelist_observer: 1,
+        key: 1,
+        duration: 1,
+        startAt: 1, // Assuming you have this field in your collection
+      })
+      .toArray();
+
+    const result = allRooms.filter((room) =>
+      calculateCountdown(room.startAt, room.duration)
+    );
+
+    if (result.length === 0) {
+      return res
+        .status(404)
+        .send({ message: "No rooms found for this user", status: 404 });
+    }
+
+    res.status(200).send(result);
+  } catch (error) {
+    // Handle errors
+    console.error("Error occurred while checking whitelist:", error);
+    res
+      .status(500)
+      .send({ message: "Internal server error", status: 500, type: "" });
+  }
+});
+app.get("/getRoomObserver", async (req, res) => {
+  console.log("Get Room");
+  const { user_id } = req.body;
+
+  try {
+    console.log("User ID:", user_id);
+    const allRooms = await haikus
+      .find({
+        whitelist_observer: { $elemMatch: { id: parseInt(user_id, 10) } },
+        status: { $in: ["live", "publish"] },
+      })
+      .project({
+        title: 1,
+        soal: 1,
+        whitelist_observer: 1,
+        key: 1,
+        duration: 1,
+        startAt: 1,
+        status: 1, // Include room status in the projection
+      })
+      .toArray();
+
+    const result = allRooms.filter((room) => {
+      if (room.status === "live") {
+        return calculateCountdownWithBuffer(room.startAt, room.duration);
+      }
+      return true; // If the status is "publish", include the room
+    });
+
+    if (result.length === 0) {
+      return res
+        .status(404)
+        .send({ message: "No rooms found for this user", status: 404 });
+    }
+
+    res.status(200).send(result);
+  } catch (error) {
+    // Handle errors
+    console.error("Error occurred while checking whitelist:", error);
+    res
+      .status(500)
+      .send({ message: "Internal server error", status: 500, type: "" });
+  }
+});
 app.post("/joinRoom1", async (req, res) => {
   console.log("Join Room");
   // Extract room, key, and user_id from request body
@@ -388,93 +482,6 @@ io.on("connection", async (socket) => {
     }
   });
 
-  // socket.on("answer", async (data) => {
-  //   // console.log(data);
-
-  //   const existingDocument = await jawaban.findOne({
-  //     id_soal: data.idsoal,
-  //     id_room: data.idroom,
-  //     id_user: data.iduser,
-  //   });
-
-  //   if (existingDocument) {
-  //     // If the document already exists
-  //     const existingQuestion = existingDocument.questions.find(
-  //       (question) => question.question_index === data.questionindex
-  //     );
-
-  //     if (existingQuestion) {
-  //       // If the question index already exists, update the answer index
-  //       await jawaban.updateOne(
-  //         {
-  //           id_soal: data.idsoal,
-  //           id_room: data.idroom,
-  //           id_user: data.iduser,
-  //           "questions.question_index": data.questionindex,
-  //         },
-  //         {
-  //           $set: {
-  //             "questions.$.answer_question": [
-  //               {
-  //                 title: data.answer["title"],
-  //                 value: data.answer["value"],
-  //                 answer_index: data.answerindex,
-  //               },
-  //             ],
-  //           },
-  //         }
-  //       );
-  //     } else {
-  //       // If the question index doesn't exist, add a new question
-  //       await jawaban.updateOne(
-  //         {
-  //           id_soal: data.idsoal,
-  //           id_room: data.idroom,
-  //           id_user: data.iduser,
-  //         },
-  //         {
-  //           $push: {
-  //             questions: {
-  //               question: data.question,
-  //               type: "type_1",
-  //               question_index: data.questionindex,
-  //               options: data.option,
-  //               answer_question: [
-  //                 {
-  //                   title: data.answer["title"],
-  //                   value: data.answer["value"],
-  //                   answer_index: data.answerindex,
-  //                 },
-  //               ],
-  //             },
-  //           },
-  //         }
-  //       );
-  //     }
-  //   } else {
-  //     // If the document doesn't exist, insert a new one
-  //     await jawaban.insertOne({
-  //       id_soal: data.idsoal,
-  //       id_room: data.idroom,
-  //       id_user: data.iduser,
-  //       questions: [
-  //         {
-  //           question: data.question,
-  //           type: "type_1",
-  //           question_index: data.questionindex,
-  //           options: data.option,
-  //           answer_question: [
-  //             {
-  //               title: data.answer["title"],
-  //               value: data.answer["value"],
-  //               answer_index: data.answerindex,
-  //             },
-  //           ],
-  //         },
-  //       ],
-  //     });
-  //   }
-  // });
   socket.on("answer_new", async (data) => {
     try {
       // Fetch the room data from the database
@@ -561,44 +568,46 @@ io.on("connection", async (socket) => {
 
   socket.on("finishUser", (user) => {
     if (name !== null) {
-        let roomIndex = room.findIndex((entry) => entry.room === roomName);
-        let participantIndex = room[roomIndex].participant.findIndex(
-            (participant) => participant.name === name
-        );
-        
-        if (participantIndex !== -1) { // Check if participant is found
-            room[roomIndex].participant[participantIndex].limit = 0;
-            room[roomIndex].participant[participantIndex].isfinish = "yes";
-            emitRoom(roomName);
-            emitUser(roomName, name + "finish", "finish");
-            console.log(`Finish ${name}'s limit to 0`);
-        } else {
-            console.log(`Participant with name ${name} not found`);
-        }
-    } else {
-        console.log(`Name is null`);
-    }
-});
-
-socket.on("kickUser", (user) => {
-  if (user !== null) {
       let roomIndex = room.findIndex((entry) => entry.room === roomName);
       let participantIndex = room[roomIndex].participant.findIndex(
-          (participant) => participant.name === user
+        (participant) => participant.name === name
       );
-      
-      if (participantIndex !== -1) { // Check if participant is found
-          room[roomIndex].participant[participantIndex].limit = 0;
-          emitRoom(roomName);
-          emitUser(roomName, user + "kick", "kicked");
-          console.log(`Kicked ${user} and set their limit to 0`);
+
+      if (participantIndex !== -1) {
+        // Check if participant is found
+        room[roomIndex].participant[participantIndex].limit = 0;
+        room[roomIndex].participant[participantIndex].isfinish = "yes";
+        emitRoom(roomName);
+        emitUser(roomName, name + "finish", "finish");
+        console.log(`Finish ${name}'s limit to 0`);
       } else {
-          console.log(`Participant with name ${user} not found`);
+        console.log(`Participant with name ${name} not found`);
       }
-  } else {
+    } else {
+      console.log(`Name is null`);
+    }
+  });
+
+  socket.on("kickUser", (user) => {
+    if (user !== null) {
+      let roomIndex = room.findIndex((entry) => entry.room === roomName);
+      let participantIndex = room[roomIndex].participant.findIndex(
+        (participant) => participant.name === user
+      );
+
+      if (participantIndex !== -1) {
+        // Check if participant is found
+        room[roomIndex].participant[participantIndex].limit = 0;
+        emitRoom(roomName);
+        emitUser(roomName, user + "kick", "kicked");
+        console.log(`Kicked ${user} and set their limit to 0`);
+      } else {
+        console.log(`Participant with name ${user} not found`);
+      }
+    } else {
       console.log(`User is null`);
-  }
-});
+    }
+  });
 
   socket.on("resetUser", (userName) => {
     if (roomName && userName) {
