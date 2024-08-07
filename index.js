@@ -73,6 +73,7 @@ const calculateCountdown = (startAt, duration) => {
   if (!startAt || !duration) {
     return false;
   }
+
   const endTime = new Date(
     startAt.getTime() +
       duration.hours * 3600000 +
@@ -80,8 +81,18 @@ const calculateCountdown = (startAt, duration) => {
       duration.seconds * 1000
   );
   const durationMs = endTime.getTime() - new Date().getTime();
-  return durationMs > 0;
+
+  if (durationMs > 0) {
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+
+    return { hours, minutes, seconds };
+  }
+
+  return null;
 };
+
 const calculateCountdownWithBuffer = (startAt, duration) => {
   if (!startAt || !duration) {
     return false;
@@ -95,17 +106,30 @@ const calculateCountdownWithBuffer = (startAt, duration) => {
       5 * 60000 // Adding 5 minutes buffer
   );
   const durationMs = endTime.getTime() - new Date().getTime();
-  return durationMs > 0;
+
+  if (durationMs > 0) {
+    const hours = Math.floor(durationMs / (1000 * 60 * 60));
+    const minutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((durationMs % (1000 * 60)) / 1000);
+
+    return { hours, minutes, seconds };
+  }
+
+  return null;
 };
-app.get("/getRoomParticipant", async (req, res) => {
+
+app.post("/getRoom", async (req, res) => {
   console.log("Get Room");
   const { user_id } = req.body;
 
   try {
     console.log("User ID:", user_id);
-    const allRooms = await haikus
+    const userId = parseInt(user_id, 10);
+
+    // First, try to get rooms where the user is a participant
+    let allRooms = await haikus
       .find({
-        whitelist_partisipant: { $elemMatch: { id: parseInt(user_id, 10) } },
+        whitelist_partisipant: { $elemMatch: { id: userId } },
         status: "live",
       })
       .project({
@@ -114,57 +138,60 @@ app.get("/getRoomParticipant", async (req, res) => {
         whitelist_observer: 1,
         key: 1,
         duration: 1,
-        startAt: 1, // Assuming you have this field in your collection
-      })
-      .toArray();
-
-    const result = allRooms.filter((room) =>
-      calculateCountdown(room.startAt, room.duration)
-    );
-
-    if (result.length === 0) {
-      return res
-        .status(404)
-        .send({ message: "No rooms found for this user", status: 404 });
-    }
-
-    res.status(200).send(result);
-  } catch (error) {
-    // Handle errors
-    console.error("Error occurred while checking whitelist:", error);
-    res
-      .status(500)
-      .send({ message: "Internal server error", status: 500, type: "" });
-  }
-});
-app.get("/getRoomObserver", async (req, res) => {
-  console.log("Get Room");
-  const { user_id } = req.body;
-
-  try {
-    console.log("User ID:", user_id);
-    const allRooms = await haikus
-      .find({
-        whitelist_observer: { $elemMatch: { id: parseInt(user_id, 10) } },
-        status: { $in: ["live", "publish"] },
-      })
-      .project({
-        title: 1,
-        soal: 1,
-        whitelist_observer: 1,
-        key: 1,
-        duration: 1,
         startAt: 1,
-        status: 1, // Include room status in the projection
+        status: 1,
       })
       .toArray();
 
-    const result = allRooms.filter((room) => {
-      if (room.status === "live") {
-        return calculateCountdownWithBuffer(room.startAt, room.duration);
-      }
-      return true; // If the status is "publish", include the room
-    });
+    let result = allRooms
+      .map((room) => {
+        if (calculateCountdown(room.startAt, room.duration)) {
+          const countdown = calculateCountdown(room.startAt, room.duration);
+          return {
+            ...room,
+            countdown,
+          };
+        }
+        return null;
+      })
+      .filter((room) => room !== null);
+
+    // If no rooms found, try to get rooms where the user is an observer
+    if (result.length === 0) {
+      allRooms = await haikus
+        .find({
+          whitelist_observer: { $elemMatch: { id: userId } },
+          status: { $in: ["live", "publish"] },
+        })
+        .project({
+          title: 1,
+          soal: 1,
+          whitelist_observer: 1,
+          key: 1,
+          duration: 1,
+          startAt: 1,
+          status: 1,
+        })
+        .toArray();
+
+      result = allRooms
+        .map((room) => {
+          if (
+            room.status === "live" &&
+            calculateCountdownWithBuffer(room.startAt, room.duration)
+          ) {
+            const countdown = calculateCountdown(room.startAt, room.duration);
+            return {
+              ...room,
+              countdown,
+            };
+          } else if (room.status === "publish") {
+            return room;
+          }
+          return null;
+        })
+        .filter((room) => room !== null);
+    }
 
     if (result.length === 0) {
       return res
@@ -181,6 +208,7 @@ app.get("/getRoomObserver", async (req, res) => {
       .send({ message: "Internal server error", status: 500, type: "" });
   }
 });
+
 app.post("/joinRoom1", async (req, res) => {
   console.log("Join Room");
   // Extract room and user_id from request body
@@ -523,9 +551,10 @@ io.on("connection", async (socket) => {
 
           // Add correct answer details to the answer object
           answer.correctAnswerIndex = correctAnswerIndex;
-          answer.correctAnswerTitle = question.answer_keys.title != null
-          ? question.answer_keys.title
-          : 'null';
+          answer.correctAnswerTitle =
+            question.answer_keys.title != null
+              ? question.answer_keys.title
+              : "null";
           // Check if the question has been answered
           if (answer.answerIndex !== "0") {
             answeredQuestionsCount++;
